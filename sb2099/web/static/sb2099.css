@@ -151,3 +151,82 @@ main { max-width: 880px; margin: 0 auto; padding: 24px 20px 80px; }
 @media (max-width: 600px) {
   .foot { flex-direction: column; gap: 4px; }
 }
+
+/* 投稿表单 */
+.submit-form {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.submit-form h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.submit-form textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.submit-form .tag-pick {
+  margin: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.submit-form .tag-pick label {
+  cursor: pointer;
+  font-size: 13px;
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.submit-form .tag-pick input { margin-right: 4px; }
+.submit-form button[type="submit"] {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* 条目操作按钮 */
+.actions { display: flex; gap: 8px; margin-top: 6px; }
+.actions button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.actions button:hover { color: var(--accent); border-color: var(--accent); }
+.actions button.danger:hover { color: #c62828; border-color: #c62828; }
+.actions button.primary { color: var(--accent); border-color: var(--accent); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%) translateY(20px);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #fff;
+  background: #333;
+  opacity: 0;
+  transition: opacity .25s, transform .25s;
+  pointer-events: none;
+  z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.ok { background: #1e8e3e; }
+.toast.err { background: #c62828; }

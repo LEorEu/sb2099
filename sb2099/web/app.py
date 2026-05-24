@@ -9,9 +9,12 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from ..cron import archive_loop, recount_loop
 from ..ingest.worker import start_background
+from ..ratelimit import limiter
 from .routes_api import router as api_router
 from .routes_public import router as public_router
 
@@ -40,6 +43,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="sb2099", lifespan=lifespan)
+app.state.limiter = limiter
+
+
+def _rate_limit_handler(request, exc):  # type: ignore[no-untyped-def]
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=429, content={"detail": f"rate limit exceeded: {exc.detail}"})
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 app.include_router(api_router)
 app.include_router(public_router)
 

@@ -1,10 +1,40 @@
-"""共用 fixture：临时 sqlite + alembic upgrade head。"""
+"""共用 fixture：临时 sqlite + alembic upgrade head + 测试 app 工厂。"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
 import pytest
+
+
+def build_test_app():
+    """与生产 app 同构但不挂 lifespan（避免 ingest/cron 真连上游 WS）。"""
+    from fastapi import FastAPI
+    from fastapi.staticfiles import StaticFiles
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+
+    from sb2099.ratelimit import limiter
+    from sb2099.web.routes_api import router as api_router
+    from sb2099.web.routes_public import router as public_router
+
+    app = FastAPI()
+    app.state.limiter = limiter
+
+    from fastapi.responses import JSONResponse
+
+    def _rate_limit_handler(request, exc):  # noqa: ANN001
+        return JSONResponse(
+            status_code=429, content={"detail": f"rate limit exceeded: {exc.detail}"}
+        )
+
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
+    app.include_router(api_router)
+    app.include_router(public_router)
+    static_dir = Path(__file__).parent.parent / "sb2099" / "web" / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    return app
 
 
 @pytest.fixture()

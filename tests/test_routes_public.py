@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
 
@@ -16,15 +14,10 @@ from sb2099.models import Barrage, LiveHot
 
 @pytest.fixture
 def client(tmp_db):
-    from sb2099.web.routes_api import router as api_router
-    from sb2099.web.routes_public import router as public_router
-
-    app = FastAPI()
-    app.include_router(api_router)
-    app.include_router(public_router)
-    static_dir = Path(__file__).parent.parent / "sb2099" / "web" / "static"
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-    return TestClient(app)
+    from tests.conftest import build_test_app
+    from sb2099.ratelimit import limiter
+    limiter.reset()
+    return TestClient(build_test_app())
 
 
 def test_home_200(client):

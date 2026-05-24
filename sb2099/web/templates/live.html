@@ -16,6 +16,15 @@
           <span>{{ it.unique_senders }} 人发过</span>
           <span>最近 {{ it.last_seen }}</span>
         </div>
+        <div class="actions">
+          <button data-action="copy"
+                  data-source="live_hot"
+                  data-id="{{ it.id }}"
+                  data-content="{{ it.content_sample }}">复制</button>
+          <button class="primary"
+                  data-action="promote"
+                  data-id="{{ it.id }}">+ 加入投稿库</button>
+        </div>
       </li>
     {% endfor %}
   </ol>
