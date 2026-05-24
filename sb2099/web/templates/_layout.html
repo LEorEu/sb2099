@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}sb2099{% endblock %}</title>
+  <link rel="stylesheet" href="/static/sb2099.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">sb2099</a>
+    <nav>
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">首页</a>
+      <a href="/barrage" class="{% if request.url.path.startswith('/barrage') %}active{% endif %}">全部烂梗</a>
+      <a href="/live" class="{% if request.url.path.startswith('/live') %}active{% endif %}">热门弹幕</a>
+      <a href="/userscript" class="us">油猴脚本</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="foot">
+    <span>斗鱼 2099（房间 12740109，一团肉松子）</span>
+    <span>原始弹幕 30 天后归档；仅记录 IP 哈希；不接广告</span>
+  </footer>
+</body>
+</html>

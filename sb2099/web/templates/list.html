@@ -1,0 +1,58 @@
+{% extends "_layout.html" %}
+{% block title %}全部烂梗 — sb2099{% endblock %}
+{% block content %}
+<section class="filters">
+  <form method="get" action="/barrage" class="search">
+    <input type="text" name="q" value="{{ q }}" placeholder="搜索烂梗…">
+    <select name="sort">
+      <option value="new" {% if sort == 'new' %}selected{% endif %}>最新</option>
+      <option value="hot" {% if sort == 'hot' %}selected{% endif %}>最热</option>
+    </select>
+    {% if selected_tags %}
+      <input type="hidden" name="tag" value="{{ selected_tags|join(',') }}">
+    {% endif %}
+    <button type="submit">搜索</button>
+  </form>
+  <div class="tag-chips">
+    {% for t in tags %}
+      {% set is_active = t.value in selected_tags %}
+      <a class="chip{% if is_active %} active{% endif %}"
+         href="?{% if q %}q={{ q }}&{% endif %}sort={{ sort }}&tag={{ t.value }}">
+        {{ t.label }}
+      </a>
+    {% endfor %}
+    {% if selected_tags %}
+      <a class="chip clear" href="?{% if q %}q={{ q }}&{% endif %}sort={{ sort }}">清除筛选</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="meta">共 {{ result.total }} 条</section>
+
+{% if result.list %}
+  <ul class="barrage-list">
+    {% for item in result.list %}
+      <li>
+        <div class="content">{{ item.content }}</div>
+        <div class="meta">
+          <span>#{{ item.id }}</span>
+          <span>tags: {{ item.tags }}</span>
+          <span>复制 {{ item.cnt }}</span>
+          <span>{{ item.submit_time }}</span>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  <nav class="pager">
+    {% if page > 1 %}
+      <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_tags %}tag={{ selected_tags|join(',') }}&{% endif %}sort={{ sort }}&page={{ page - 1 }}">上一页</a>
+    {% endif %}
+    <span>第 {{ page }} 页</span>
+    {% if not result.last_page %}
+      <a href="?{% if q %}q={{ q }}&{% endif %}{% if selected_tags %}tag={{ selected_tags|join(',') }}&{% endif %}sort={{ sort }}&page={{ page + 1 }}">下一页</a>
+    {% endif %}
+  </nav>
+{% else %}
+  <p class="empty">暂无投稿。</p>
+{% endif %}
+{% endblock %}

@@ -5,11 +5,14 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from ..cron import archive_loop, recount_loop
 from ..ingest.worker import start_background
+from .routes_api import router as api_router
 from .routes_public import router as public_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,4 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="sb2099", lifespan=lifespan)
+app.include_router(api_router)
 app.include_router(public_router)
+
+_STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

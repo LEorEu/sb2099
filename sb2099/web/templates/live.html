@@ -1,0 +1,25 @@
+{% extends "_layout.html" %}
+{% block title %}热门弹幕 — sb2099{% endblock %}
+{% block content %}
+<section class="window-toggle">
+  <a href="?window=day" class="{% if window == 'day' %}active{% endif %}">今日 Top 10</a>
+  <a href="?window=week" class="{% if window == 'week' %}active{% endif %}">本周 Top 50</a>
+</section>
+
+{% if items %}
+  <ol class="live-list">
+    {% for it in items %}
+      <li>
+        <div class="content">{{ it.content_sample }}</div>
+        <div class="meta">
+          <span>×{{ it.send_cnt }}</span>
+          <span>{{ it.unique_senders }} 人发过</span>
+          <span>最近 {{ it.last_seen }}</span>
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+{% else %}
+  <p class="empty">暂无热门弹幕（直播间没人说话或还没采集到）。</p>
+{% endif %}
+{% endblock %}
