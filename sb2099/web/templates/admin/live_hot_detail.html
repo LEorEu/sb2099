@@ -1,0 +1,38 @@
+{% extends "admin/_layout.html" %}
+{% block title %}{{ hot.content_sample[:20] }} — sb2099 后台{% endblock %}
+{% block content %}
+<h1>热门条目 #{{ hot.id }}</h1>
+<div class="content" style="font-size:18px; padding:12px 0">{{ hot.content_sample }}</div>
+<div class="meta">
+  <span>content_norm: <code>{{ hot.content_norm }}</code></span>
+  <span>send_cnt_total: {{ hot.send_cnt_total }}</span>
+  <span>first_seen: {{ hot.first_seen }}</span>
+  <span>last_seen: {{ hot.last_seen }}</span>
+  <span>is_filtered: {{ hot.is_filtered }}</span>
+</div>
+
+<h3>TOP 30 发送 uid（识别刷子）</h3>
+<table class="admin-table">
+  <thead><tr><th>uid</th><th>次数</th></tr></thead>
+  <tbody>
+  {% for uid, cnt in top_uids %}
+    <tr><td><code>{{ uid }}</code></td><td>{{ cnt }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3>最近 {{ raws|length }} 条原始弹幕</h3>
+<table class="admin-table">
+  <thead><tr><th>uid</th><th>昵称</th><th>ts</th><th>原文</th></tr></thead>
+  <tbody>
+  {% for r in raws %}
+    <tr>
+      <td><code>{{ r.uid or '' }}</code></td>
+      <td>{{ r.nickname or '' }}</td>
+      <td>{{ r.ts }}</td>
+      <td class="content">{{ r.content_raw }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Tag 字典 — sb2099 后台{% endblock %}
+{% block content %}
+<h1>Tag 字典</h1>
+
+<section class="admin-form">
+  <h3>新增 tag</h3>
+  <form method="post" action="/admin/tags">
+    <input type="text" name="value" placeholder="value (00-zz)" maxlength="8" pattern="[0-9A-Za-z]{1,8}" required>
+    <input type="text" name="label" placeholder="显示名" required>
+    <input type="text" name="icon_url" placeholder="icon URL（可空）">
+    <input type="number" name="sort" placeholder="排序" value="0">
+    <button type="submit">新增</button>
+  </form>
+</section>
+
+<table class="admin-table">
+  <thead>
+    <tr><th>value</th><th>label</th><th>icon</th><th>sort</th><th>enabled</th><th>操作</th></tr>
+  </thead>
+  <tbody>
+  {% for t in tags %}
+    <tr>
+      <form method="post" action="/admin/tags/{{ t.value }}/update">
+        <td><code>{{ t.value }}</code></td>
+        <td><input type="text" name="label" value="{{ t.label }}" required></td>
+        <td><input type="text" name="icon_url" value="{{ t.icon_url or '' }}"></td>
+        <td><input type="number" name="sort" value="{{ t.sort }}" style="width:60px"></td>
+        <td>
+          <select name="enabled">
+            <option value="1" {% if t.enabled %}selected{% endif %}>启用</option>
+            <option value="0" {% if not t.enabled %}selected{% endif %}>禁用</option>
+          </select>
+        </td>
+        <td>
+          <button type="submit">保存</button>
+        </td>
+      </form>
+      <td>
+        <form method="post" action="/admin/tags/{{ t.value }}/delete" onsubmit="return confirm('删除 tag {{ t.value }}？')">
+          <button type="submit" class="danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -15,6 +15,7 @@ def build_test_app():
     from slowapi.middleware import SlowAPIMiddleware
 
     from sb2099.ratelimit import limiter
+    from sb2099.web.routes_admin import router as admin_router
     from sb2099.web.routes_api import router as api_router
     from sb2099.web.routes_public import router as public_router
 
@@ -31,6 +32,7 @@ def build_test_app():
     app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
     app.add_middleware(SlowAPIMiddleware)
     app.include_router(api_router)
+    app.include_router(admin_router)
     app.include_router(public_router)
     static_dir = Path(__file__).parent.parent / "sb2099" / "web" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

@@ -1,0 +1,29 @@
+{% extends "admin/_layout.html" %}
+{% block title %}回收站 — sb2099 后台{% endblock %}
+{% block content %}
+<h1>回收站 ({{ items|length }})</h1>
+{% if not items %}
+  <p class="empty">回收站为空。</p>
+{% else %}
+<ul class="admin-list">
+  {% for it in items %}
+    <li>
+      <div class="content">{{ it.content }}</div>
+      <div class="meta">
+        <span>#{{ it.id }}</span>
+        <span>tags: {{ it.tags }}</span>
+        <span>{{ it.submit_time }}</span>
+      </div>
+      <div class="actions">
+        <form method="post" action="/admin/barrage/{{ it.id }}/restore">
+          <button type="submit" class="primary">恢复</button>
+        </form>
+        <form method="post" action="/admin/barrage/{{ it.id }}/purge" onsubmit="return confirm('永久删除？此操作不可恢复。')">
+          <button type="submit" class="danger">永久删除</button>
+        </form>
+      </div>
+    </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

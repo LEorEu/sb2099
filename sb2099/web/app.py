@@ -15,6 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from ..cron import archive_loop, recount_loop
 from ..ingest.worker import start_background
 from ..ratelimit import limiter
+from .routes_admin import router as admin_router
 from .routes_api import router as api_router
 from .routes_public import router as public_router
 
@@ -54,6 +55,7 @@ def _rate_limit_handler(request, exc):  # type: ignore[no-untyped-def]
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.include_router(api_router)
+app.include_router(admin_router)
 app.include_router(public_router)
 
 _STATIC_DIR = Path(__file__).parent / "static"

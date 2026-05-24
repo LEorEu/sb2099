@@ -1,0 +1,19 @@
+{% extends "admin/_layout.html" %}
+{% block title %}设置 — sb2099 后台{% endblock %}
+{% block content %}
+<h1>运行时设置</h1>
+{% if request.query_params.get('ok') %}<p class="ok-note">已保存，settings_cache 已失效。</p>{% endif %}
+{% if request.query_params.get('err') %}<p class="err-note">{{ request.query_params.get('err') }}</p>{% endif %}
+<p class="hint">所有值用 JSON 表示。改完后下次访问立刻生效（settings_cache 已自动 invalidate）。</p>
+<form method="post" action="/admin/settings" class="settings-form">
+  {% for key in keys %}
+    {% set val, ts = items.get(key, ('', None)) %}
+    <div class="row">
+      <label>{{ key }}</label>
+      <textarea name="{{ key }}" rows="{% if 'rules' in key or 'filters' in key %}3{% else %}1{% endif %}">{{ val }}</textarea>
+      <span class="ts">{% if ts %}{{ ts }}{% endif %}</span>
+    </div>
+  {% endfor %}
+  <button type="submit">保存</button>
+</form>
+{% endblock %}

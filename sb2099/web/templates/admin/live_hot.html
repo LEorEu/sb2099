@@ -1,0 +1,35 @@
+{% extends "admin/_layout.html" %}
+{% block title %}直播热门 — sb2099 后台{% endblock %}
+{% block content %}
+<h1>直播热门 ({{ items|length }} 行 · {{ '仅命中降噪' if filtered else '全部' }})</h1>
+
+<section class="admin-toolbar">
+  <a href="/admin/live_hot" class="{% if not filtered %}active{% endif %}">全部</a>
+  <a href="/admin/live_hot?filtered=true" class="{% if filtered %}active{% endif %}">仅命中降噪</a>
+  <form method="post" action="/admin/live_hot/rescan" style="display:inline-block; margin-left:auto">
+    <button type="submit" class="primary">改完规则后重扫 is_filtered</button>
+  </form>
+</section>
+{% if request.query_params.get('rescan_ok') %}
+  <p class="ok-note">重扫完成：{{ request.query_params.get('rescan_ok') }}</p>
+{% endif %}
+
+<table class="admin-table">
+  <thead>
+    <tr><th>#</th><th>内容</th><th>24h</th><th>total</th><th>不同发送者</th><th>最近</th><th>命中</th></tr>
+  </thead>
+  <tbody>
+  {% for it in items %}
+    <tr>
+      <td><a href="/admin/live_hot/{{ it.id }}">#{{ it.id }}</a></td>
+      <td class="content">{{ it.content_sample }}</td>
+      <td>{{ it.send_cnt_24h }}</td>
+      <td>{{ it.send_cnt_total }}</td>
+      <td>{{ it.unique_sender_cnt_24h }}</td>
+      <td>{{ it.last_seen }}</td>
+      <td>{% if it.is_filtered %}<span class="bad">是</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
