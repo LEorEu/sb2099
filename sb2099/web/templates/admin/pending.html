@@ -1,30 +1,44 @@
 {% extends "admin/_layout.html" %}
-{% block title %}待审投稿 — sb2099 后台{% endblock %}
+{% block title %}待审核投稿 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>待审投稿 ({{ items|length }})</h1>
+
+<div class="page-header-box animate-fade">
+  <h2>待审核投稿 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">投稿待审队列 (当前: {{ items|length }} 条) · 过滤被拦截需要人工介入审核的条目</span></h2>
+</div>
+
+<!-- Barrage Card List -->
 {% if not items %}
-  <p class="empty">当前无待审投稿。</p>
+  <div class="glass-card empty animate-fade">
+    <p style="padding: 20px 0; color: var(--fg-subtle);">🎉 当前审核队列空空如也，无需任何处理！所有投稿均已自动过审或已完成审批。</p>
+  </div>
 {% else %}
-<ul class="admin-list">
-  {% for it in items %}
-    <li>
-      <div class="content">{{ it.content }}</div>
-      <div class="meta">
-        <span>#{{ it.id }}</span>
-        <span>tags: {{ it.tags }}</span>
-        <span>{{ it.submit_time }}</span>
-      </div>
-      <div class="actions">
-        <form method="post" action="/admin/barrage/{{ it.id }}/approve">
-          <input type="text" name="tags" value="{{ it.tags }}" placeholder="修正 tag CSV" size="20">
-          <button type="submit" class="primary">通过</button>
-        </form>
-        <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('拒绝并删除？')">
-          <button type="submit" class="danger">拒绝</button>
-        </form>
-      </div>
-    </li>
-  {% endfor %}
-</ul>
+  <ul class="admin-list animate-fade">
+    {% for it in items %}
+      <li class="glass-card" style="margin-bottom: 16px; padding: 20px 24px; border-color: hsla(38, 92%, 50%, 0.2);">
+        <div class="content" style="font-size: 15px; font-weight: 500; color: #fff;">{{ it.content }}</div>
+        
+        <div class="meta" style="margin: 8px 0 16px;">
+          <span style="color: var(--warning); border-color: hsla(38, 92%, 50%, 0.3); background: hsla(38, 92%, 50%, 0.05); font-weight: 600;"># 待审条目</span>
+          <span>ID: #{{ it.id }}</span>
+          <span>原分类 Tags: {{ it.tags }}</span>
+          <span>提交时间: {{ it.submit_time }}</span>
+        </div>
+        
+        <div class="actions" style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+          <!-- Approve form allows editing tags before approval -->
+          <form method="post" action="/admin/barrage/{{ it.id }}/approve" style="display: inline-flex; gap: 8px; align-items: center; flex: 1; max-width: 480px;">
+            <input type="text" name="tags" value="{{ it.tags }}" placeholder="可在过审时修正常用 Tag 标签 (如 00,02)" required style="flex: 1; min-width: 200px;">
+            <button type="submit" class="btn btn-primary" style="padding: 6px 16px; font-size: 12px; background: linear-gradient(135deg, var(--success) 0%, hsl(145, 65%, 35%) 100%); box-shadow: 0 0 12px hsla(145, 65%, 45%, 0.3); border-color: transparent;">✓ 审批通过</button>
+          </form>
+          
+          <!-- Reject form -->
+          <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('⚠️ 确认要“拒绝并回收”该条投稿吗？拒绝后条目将进入回收站。')" style="display: inline-block;">
+            <button type="submit" class="btn btn-secondary danger" style="padding: 6px 16px; font-size: 12px;">✕ 拒绝并移入回收站</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
 {% endif %}
+
 {% endblock %}

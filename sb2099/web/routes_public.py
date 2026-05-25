@@ -76,9 +76,12 @@ async def live_page(
         else ("send_cnt_7d", "unique_sender_cnt_7d", 50)
     )
     sql = text(
-        f"SELECT id, content_sample, {cnt_col} AS send_cnt, {uniq_col} AS unique_senders, "
-        "last_seen FROM live_hot WHERE is_filtered=0 "
-        f"ORDER BY {cnt_col} DESC, last_seen DESC LIMIT :limit"
+        f"SELECT lh.id, lh.content_sample, lh.{cnt_col} AS send_cnt, lh.{uniq_col} AS unique_senders, "
+        f"lh.last_seen, b.id AS barrage_id, b.tags AS barrage_tags "
+        f"FROM live_hot lh "
+        f"LEFT JOIN barrage b ON b.content_norm = lh.content_norm AND b.status = 'active' "
+        f"WHERE lh.is_filtered=0 "
+        f"ORDER BY lh.{cnt_col} DESC, lh.last_seen DESC LIMIT :limit"
     )
     with _db.SessionLocal() as s:
         rows = s.execute(sql, {"limit": limit}).mappings().all()
@@ -89,13 +92,15 @@ async def live_page(
             "send_cnt": int(r["send_cnt"] or 0),
             "unique_senders": int(r["unique_senders"] or 0),
             "last_seen": r["last_seen"],
+            "barrage_id": r["barrage_id"],
+            "barrage_tags": r["barrage_tags"],
         }
         for r in rows
     ]
     return templates.TemplateResponse(
         request=request,
         name="live.html",
-        context={"window": window, "items": items},
+        context={"window": window, "items": items, "tags": _enabled_tags()},
     )
 
 

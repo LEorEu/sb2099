@@ -1,30 +1,42 @@
 {% extends "admin/_layout.html" %}
-{% block title %}反馈榜 — sb2099 后台{% endblock %}
+{% block title %}被举报的投稿 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>被反馈的投稿 ({{ items|length }})</h1>
+
+<div class="page-header-box animate-fade">
+  <h2>“不合适”反馈列表 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">被标记“不合适”的正式投稿 (当前: {{ items|length }} 条) · 优先排序多次被举报的梗</span></h2>
+</div>
+
+<!-- Barrage Card List -->
 {% if not items %}
-  <p class="empty">当前无反馈记录。</p>
+  <div class="glass-card empty animate-fade">
+    <p style="padding: 20px 0; color: var(--fg-subtle);">🎉 当前无任何反馈记录，投稿库内容生态健康。</p>
+  </div>
 {% else %}
-<ul class="admin-list">
-  {% for it in items %}
-    <li>
-      <div class="content">{{ it.content }}</div>
-      <div class="meta">
-        <span>#{{ it.id }}</span>
-        <span>反馈 ×{{ it.report_cnt }}</span>
-        <span>tags: {{ it.tags }}</span>
-        <span>status: {{ it.status }}</span>
-        <span>最近反馈 {{ it.last_report }}</span>
-      </div>
-      <div class="actions">
-        {% if it.status == 'active' %}
-          <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('转入回收站？')">
-            <button type="submit" class="danger">软删</button>
-          </form>
-        {% endif %}
-      </div>
-    </li>
-  {% endfor %}
-</ul>
+  <ul class="admin-list animate-fade">
+    {% for it in items %}
+      <li class="glass-card" style="margin-bottom: 16px; padding: 20px 24px; border-color: hsla(354, 75%, 55%, 0.2);">
+        <div class="content" style="font-size: 15px; font-weight: 500; color: #fff;">{{ it.content }}</div>
+        
+        <div class="meta" style="margin: 8px 0 16px;">
+          <span style="color: var(--error); border-color: hsla(354, 75%, 55%, 0.3); background: hsla(354, 75%, 55%, 0.05); font-weight: 600;">⚠️ 累计收到反馈: {{ it.report_cnt }} 次</span>
+          <span>ID: #{{ it.id }}</span>
+          <span>Tags: {{ it.tags }}</span>
+          <span>状态: {{ it.status }}</span>
+          <span>最近一次被反馈: {{ it.last_report }}</span>
+        </div>
+        
+        <div class="actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+          {% if it.status == 'active' %}
+            <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('⚠️ 确定要对此条高反馈投稿进行下架吗？\n下架后条目将进入回收站，正式库中将无法搜索到。')">
+              <button type="submit" class="btn btn-secondary danger" style="padding: 6px 16px; font-size: 12px;">立即下架并软删除</button>
+            </form>
+          {% else %}
+            <span style="font-size: 12px; color: var(--fg-subtle); font-style: italic;">已下架 ({{ it.status }})</span>
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
 {% endif %}
+
 {% endblock %}

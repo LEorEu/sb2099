@@ -1,38 +1,91 @@
 {% extends "admin/_layout.html" %}
-{% block title %}{{ hot.content_sample[:20] }} — sb2099 后台{% endblock %}
+{% block title %}热门弹幕详情 #{{ hot.id }} — sb2099 后台{% endblock %}
 {% block content %}
-<h1>热门条目 #{{ hot.id }}</h1>
-<div class="content" style="font-size:18px; padding:12px 0">{{ hot.content_sample }}</div>
-<div class="meta">
-  <span>content_norm: <code>{{ hot.content_norm }}</code></span>
-  <span>send_cnt_total: {{ hot.send_cnt_total }}</span>
-  <span>first_seen: {{ hot.first_seen }}</span>
-  <span>last_seen: {{ hot.last_seen }}</span>
-  <span>is_filtered: {{ hot.is_filtered }}</span>
+
+<div class="page-header-box animate-fade" style="margin-bottom: 12px;">
+  <h2>热门弹幕审计详情 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">热门弹幕行 ID: #{{ hot.id }} · 抓取数据溯源与机器人刷子排查</span></h2>
 </div>
 
-<h3>TOP 30 发送 uid（识别刷子）</h3>
-<table class="admin-table">
-  <thead><tr><th>uid</th><th>次数</th></tr></thead>
-  <tbody>
-  {% for uid, cnt in top_uids %}
-    <tr><td><code>{{ uid }}</code></td><td>{{ cnt }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<!-- Header card for hot details -->
+<div class="glass-card animate-fade">
+  <div class="content" style="font-size: 20px; font-weight:600; padding: 12px 0; color: #fff; border-bottom: 1px solid var(--border);">
+    “ {{ hot.content_sample }} ”
+  </div>
+  
+  <div class="meta" style="margin-top: 16px;">
+    <span>归一化哈希 (content_norm): <code style="font-family: var(--font-mono); color: var(--accent);">{{ hot.content_norm }}</code></span>
+    <span>累计发送数: {{ hot.send_cnt_total }} 次</span>
+    <span>首次捕获: {{ hot.first_seen }}</span>
+    <span>最近捕获: {{ hot.last_seen }}</span>
+    <span>是否被过滤: {% if hot.is_filtered %}已过滤限制{% else %}公开正常{% endif %}</span>
+  </div>
+</div>
 
-<h3>最近 {{ raws|length }} 条原始弹幕</h3>
-<table class="admin-table">
-  <thead><tr><th>uid</th><th>昵称</th><th>ts</th><th>原文</th></tr></thead>
-  <tbody>
-  {% for r in raws %}
-    <tr>
-      <td><code>{{ r.uid or '' }}</code></td>
-      <td>{{ r.nickname or '' }}</td>
-      <td>{{ r.ts }}</td>
-      <td class="content">{{ r.content_raw }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="home-grid">
+  <!-- Left Side: Top 30 senders (bot identification) -->
+  <div class="left-col animate-fade" style="animation-delay: 0.1s;">
+    <div class="glass-card" style="padding: 24px;">
+      <h3 style="font-family: var(--font-display); font-size: 15px; font-weight:600; margin-bottom: 16px; color:#fff;">🥇 TOP 30 发送者 UID 排行 (识别刷屏机器人)</h3>
+      
+      {% if top_uids %}
+        <div class="admin-table-container" style="margin-bottom: 0;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>斗鱼用户 UID</th>
+                <th>24h 内发送次数</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for uid, cnt in top_uids %}
+              <tr>
+                <td><code style="font-family: var(--font-mono); font-size:12px;">{{ uid }}</code></td>
+                <td style="font-weight: 600; color: var(--accent);">{{ cnt }} 次</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty" style="padding: 10px 0; font-size: 12px;">暂无发送人统计数据。</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right Side: Recent raw items -->
+  <div class="right-col animate-fade" style="animation-delay: 0.15s;">
+    <div class="glass-card" style="padding: 24px;">
+      <h3 style="font-family: var(--font-display); font-size: 15px; font-weight:600; margin-bottom: 16px; color:#fff;">🕒 最近 {{ raws|length }} 条原始弹幕记录</h3>
+      
+      {% if raws %}
+        <div class="admin-table-container" style="margin-bottom: 0; max-height: 520px; overflow-y: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>用户昵称 / UID</th>
+                <th>捕获时间</th>
+                <th>弹幕原始文本</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for r in raws %}
+              <tr>
+                <td style="font-size: 12px; line-height: 1.4; vertical-align: middle;">
+                  <strong style="color:#fff;">{{ r.nickname or '-' }}</strong>
+                  <div style="font-size: 10px; color: var(--fg-subtle); font-family: var(--font-mono);">UID: {{ r.uid or '-' }}</div>
+                </td>
+                <td style="font-size: 10px; color: var(--fg-subtle); vertical-align: middle;">{{ r.ts }}</td>
+                <td class="content" style="font-size: 12px; vertical-align: middle;">{{ r.content_raw }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty" style="padding: 10px 0; font-size: 12px;">无捕获记录。</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 {% endblock %}

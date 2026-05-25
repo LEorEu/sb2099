@@ -90,25 +90,39 @@ def test_settings_page_lists_defaults(admin_client):
 def test_settings_update_writes_db_and_invalidates_cache(admin_client):
     from sb2099.settings import settings_cache
 
-    new_filters = json.dumps(["晚安", "好梦"], ensure_ascii=False)
+    # lines 类型:每行一条,前后空白和空行自动清理
+    new_filters_text = "晚安\n  好梦  \n\n"
     r = admin_client.post(
         "/admin/settings",
-        data={"live_noise_filters": new_filters, "barrage_max_length": "500"},
+        data={"live_noise_filters": new_filters_text, "barrage_max_length": "500"},
     )
     assert r.status_code == 303
     assert "ok=1" in r.headers["location"]
-    # 立即读 settings_cache（应已 invalidate → 重载）
+    # 立即读 settings_cache(应已 invalidate → 重载)
     assert settings_cache.get("live_noise_filters") == ["晚安", "好梦"]
     assert settings_cache.get("barrage_max_length") == 500
 
 
-def test_settings_invalid_json_returns_err(admin_client):
+def test_settings_int_field_rejects_non_integer(admin_client):
     r = admin_client.post(
         "/admin/settings",
-        data={"live_noise_filters": "{not valid json"},
+        data={"barrage_max_length": "not-a-number"},
     )
     assert r.status_code == 303
     assert "err=" in r.headers["location"]
+
+
+def test_settings_lines_field_accepts_empty(admin_client):
+    """清空降噪关键词应当合法,落库成空数组。"""
+    from sb2099.settings import settings_cache
+
+    r = admin_client.post(
+        "/admin/settings",
+        data={"live_noise_filters": ""},
+    )
+    assert r.status_code == 303
+    assert "ok=1" in r.headers["location"]
+    assert settings_cache.get("live_noise_filters") == []
 
 
 # ---- tags CRUD ------------------------------------------------------------

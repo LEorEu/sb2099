@@ -1,13 +1,85 @@
 {% extends "_layout.html" %}
-{% block title %}sb2099 — 烂梗收集{% endblock %}
+{% block title %}sb2099 — 斗鱼2099烂梗收集与一键发送站{% endblock %}
 {% block content %}
-<section class="hero">
-  <h1>sb2099 服务已启动</h1>
-  <p>斗鱼 2099 房间（真实房间号 <code>12740109</code>，主播一团肉松子）烂梗收集与一键发送站。</p>
-  <p>本站开发中。已可用：
-    <a href="/live">热门弹幕</a> ·
-    <a href="/barrage">全部烂梗</a> ·
-    <a href="/userscript">油猴脚本</a>
-  </p>
+
+<!-- Dynamic Hero Visual Title -->
+<section class="hero animate-fade">
+  <h1>斗鱼 2099 <span>烂梗收集站</span></h1>
+  <p>一键安装油猴脚本，实现在 2099 房间（真实ID: <code>12740109</code>，主播“一团肉松子”）直播间内对烂梗库的模糊检索、本地收藏分组以及快捷一键发送！</p>
 </section>
+
+<!-- Homepage Double-Column Dashboard Grid -->
+<div class="home-grid">
+  
+  <!-- Left Side: Submission & Previews -->
+  <div class="left-col">
+    
+    <!-- Home Submission Area -->
+    <div class="glass-card submit-form animate-fade" style="animation-delay: 0.1s;">
+      <h3>投稿一条新烂梗</h3>
+      <form data-form="submit-barrage" method="post">
+        <textarea name="content" placeholder="写点什么烂梗… (内容将接受违禁和重名校验，最大255字)" maxlength="255" required></textarea>
+        <div class="tag-pick">
+          {% for t in tags %}
+            <label>
+              <input type="checkbox" name="tags" value="{{ t.value }}">
+              {{ t.label }}
+            </label>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary">提交到待审库</button>
+      </form>
+    </div>
+
+    <!-- Latest Previews Box (Fetched Asynchronously via JS) -->
+    <div class="glass-card latest-preview-box animate-fade" style="animation-delay: 0.2s;">
+      <h3>最新投稿预览</h3>
+      <ul class="barrage-list" id="home-latest-previews">
+        <div class="sb2099-loading">正在拉取最新玩梗动态...</div>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Right Side: Tampermonkey & Random Meme -->
+  <div class="right-col">
+    
+    <!-- Tampermonkey Install Entry Card -->
+    <div class="glass-card script-card animate-fade" style="animation-delay: 0.15s;">
+      <div class="header-box">
+        <h2>油猴小助手</h2>
+        <span class="script-badge">Beta v0.1.0</span>
+      </div>
+      <p style="font-size: 13px; color: var(--fg-muted);">直接在斗鱼直播间左侧网页嵌入烂梗弹窗，支持关键字模糊搜索、自定义收藏夹和单条发送。</p>
+      
+      <ol>
+        <li>浏览器先安装 <strong>Tampermonkey</strong> 插件</li>
+        <li>点击下方按钮，在弹出页面点击 <strong>“安装”</strong> 即可</li>
+        <li>刷新斗鱼 2099 房间页，开始享受“刷屏”乐趣！</li>
+      </ol>
+      
+      <a href="/userscript" class="btn btn-primary" style="width: 100%; border-radius: 8px;">安装油猴脚本</a>
+    </div>
+
+    <!-- Dynamic Random Meme Box -->
+    <div class="glass-card random-box animate-fade" style="animation-delay: 0.25s;">
+      <div class="random-title-bar">
+        <span class="random-title">每日一梗（随机推荐）</span>
+        <button class="refresh-btn" id="home-random-refresh">
+          <span class="spin-icon">↻</span>换一换
+        </button>
+      </div>
+      
+      <div class="random-card" id="home-random-card" data-id="" data-content="">
+        <div id="home-random-text" style="font-size: 14px; font-weight: 600; color: #fff; line-height: 1.6;">
+          正在获取随机烂梗...
+        </div>
+        <div class="hint-click">点击卡片直接复制</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
 {% endblock %}

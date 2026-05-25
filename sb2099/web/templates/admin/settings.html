@@ -1,19 +1,52 @@
 {% extends "admin/_layout.html" %}
-{% block title %}设置 — sb2099 后台{% endblock %}
+{% block title %}运行时参数设置 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>运行时设置</h1>
-{% if request.query_params.get('ok') %}<p class="ok-note">已保存，settings_cache 已失效。</p>{% endif %}
-{% if request.query_params.get('err') %}<p class="err-note">{{ request.query_params.get('err') }}</p>{% endif %}
-<p class="hint">所有值用 JSON 表示。改完后下次访问立刻生效（settings_cache 已自动 invalidate）。</p>
-<form method="post" action="/admin/settings" class="settings-form">
-  {% for key in keys %}
-    {% set val, ts = items.get(key, ('', None)) %}
-    <div class="row">
-      <label>{{ key }}</label>
-      <textarea name="{{ key }}" rows="{% if 'rules' in key or 'filters' in key %}3{% else %}1{% endif %}">{{ val }}</textarea>
-      <span class="ts">{% if ts %}{{ ts }}{% endif %}</span>
+
+<div class="page-header-box animate-fade">
+  <h2>运行时参数设置 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">阈值 · 关键词 · 限流</span></h2>
+</div>
+
+{% if request.query_params.get('ok') %}
+  <div class="glass-card animate-fade" style="padding: 12px 20px; border-color: var(--success); background: hsla(145, 65%, 10%, 0.4); margin-bottom: 20px;">
+    <p style="color: var(--success); font-size: 13px; font-weight: 600;">✓ 已保存,运行时缓存已失效,下一次访问即生效</p>
+  </div>
+{% endif %}
+
+{% if request.query_params.get('err') %}
+  <div class="glass-card animate-fade" style="padding: 12px 20px; border-color: var(--error); background: hsla(354, 75%, 10%, 0.4); margin-bottom: 20px;">
+    <p style="color: var(--error); font-size: 13px; font-weight: 600;">⚠ 错误:{{ request.query_params.get('err') }}</p>
+  </div>
+{% endif %}
+
+<div class="glass-card animate-fade" style="animation-delay: 0.1s;">
+  <p style="font-size: 13px; color: var(--fg-muted); margin-bottom: 24px; line-height: 1.6;">
+    💡 <strong>填写规则</strong>:整数类直接填数字;字符串数组类<strong>每行一条</strong>,前后空白会被自动去掉,空行会被忽略。保存后自动刷新运行时缓存,无需重启 uvicorn。
+  </p>
+
+  <form method="post" action="/admin/settings" class="settings-form" style="margin-bottom: 0;">
+    {% for item in items %}
+      <div class="row">
+        <div class="meta">
+          <label for="f-{{ item.key }}">{{ item.label }}</label>
+          <p class="desc">{{ item.desc }}</p>
+          <p class="key-mono">{{ item.key }}</p>
+        </div>
+        <div class="input-col">
+          <textarea
+            id="f-{{ item.key }}"
+            name="{{ item.key }}"
+            rows="{% if item.kind == 'lines' %}5{% else %}1{% endif %}"
+            spellcheck="false"
+          >{{ item.value_text }}</textarea>
+          <p class="hint">{{ item.hint }} · 默认值 <code>{% if item.kind == 'lines' %}{{ item.default | tojson }}{% else %}{{ item.default }}{% endif %}</code></p>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div style="margin-top: 24px; text-align: right;">
+      <button type="submit" class="btn btn-primary" style="padding: 10px 32px;">保存</button>
     </div>
-  {% endfor %}
-  <button type="submit">保存</button>
-</form>
+  </form>
+</div>
+
 {% endblock %}

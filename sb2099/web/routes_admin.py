@@ -89,18 +89,125 @@ def logout():
 # ---- settings -------------------------------------------------------------
 
 
-_SETTING_KEYS = [
-    "live_hot_min_unique_senders_24h",
-    "live_noise_filters",
-    "submission_review_rules",
-    "barrage_min_length",
-    "barrage_max_length",
-    "ratelimit_submit_per_hour_per_ip",
-    "ratelimit_report_per_hour_per_ip",
-    "ratelimit_copy_per_hour_per_ip",
-    "ratelimit_promote_per_hour_per_ip",
-    "raw_retention_days",
+# 后台「运行时参数设置」的展示元数据。
+# kind:
+#   "int"   → 单个整数,textarea rows=1
+#   "lines" → 每行一条字符串,后端 split('\n')、strip、去空行后存为 JSON 数组
+_SETTING_META: list[dict[str, object]] = [
+    {
+        "key": "live_hot_min_unique_senders_24h",
+        "label": "直播热门门槛(24h 不同发送者人数)",
+        "desc": "24h 内有多少不同账号刷过同一条弹幕,才允许进入热门榜",
+        "kind": "int",
+        "default": 3,
+        "hint": "整数,建议 3 – 10",
+    },
+    {
+        "key": "live_noise_filters",
+        "label": "直播降噪关键词",
+        "desc": "弹幕全文完全等于其中任一条时,不进入热门榜",
+        "kind": "lines",
+        "default": [],
+        "hint": "每行一条;采用「整句精确匹配」,不会被子串误伤",
+    },
+    {
+        "key": "submission_review_rules",
+        "label": "投稿待审关键词",
+        "desc": "投稿正文包含任一关键词时,先进入 pending 等管理员审核",
+        "kind": "lines",
+        "default": [],
+        "hint": "每行一条;子串包含即命中(用于违禁词等强风险词)",
+    },
+    {
+        "key": "barrage_min_length",
+        "label": "投稿最少字数",
+        "desc": "正文短于此字数会被拒收",
+        "kind": "int",
+        "default": 4,
+        "hint": "整数,建议 1 – 50",
+    },
+    {
+        "key": "barrage_max_length",
+        "label": "投稿最多字数",
+        "desc": "正文长于此字数会被拒收",
+        "kind": "int",
+        "default": 255,
+        "hint": "整数,建议 ≤ 500",
+    },
+    {
+        "key": "ratelimit_submit_per_hour_per_ip",
+        "label": "每 IP 每小时投稿次数上限",
+        "desc": "超过上限返回 429",
+        "kind": "int",
+        "default": 5,
+        "hint": "整数",
+    },
+    {
+        "key": "ratelimit_report_per_hour_per_ip",
+        "label": "每 IP 每小时「不合适」反馈次数",
+        "desc": "针对投稿库条目的负反馈频率上限",
+        "kind": "int",
+        "default": 60,
+        "hint": "整数",
+    },
+    {
+        "key": "ratelimit_copy_per_hour_per_ip",
+        "label": "每 IP 每小时复制次数",
+        "desc": "复制即累加 cnt;到达上限后该 IP 当小时不再计入",
+        "kind": "int",
+        "default": 200,
+        "hint": "整数",
+    },
+    {
+        "key": "ratelimit_promote_per_hour_per_ip",
+        "label": "每 IP 每小时「提升入库」次数",
+        "desc": "从直播热门往投稿库补 tag 提升的频率上限",
+        "kind": "int",
+        "default": 5,
+        "hint": "整数",
+    },
+    {
+        "key": "raw_retention_days",
+        "label": "原始弹幕保留天数",
+        "desc": "raw_danmaku 表保留窗口;archive_cron 每日 04:00 删早于该窗口的行",
+        "kind": "int",
+        "default": 30,
+        "hint": "整数",
+    },
 ]
+
+_SETTING_KEYS = [m["key"] for m in _SETTING_META]
+_SETTING_KIND = {m["key"]: m["kind"] for m in _SETTING_META}
+
+
+def _render_setting_value(raw_db_value: str | None, kind: str) -> str:
+    """把数据库里 JSON 序列化后的值反序列化成 textarea 显示文本。"""
+    if raw_db_value is None or raw_db_value == "":
+        return ""
+    try:
+        parsed = json.loads(raw_db_value)
+    except (TypeError, json.JSONDecodeError):
+        return raw_db_value
+    if kind == "lines":
+        if isinstance(parsed, list):
+            return "\n".join(str(x) for x in parsed)
+        return str(parsed)
+    return str(parsed)
+
+
+def _parse_setting_input(raw_form_value: str, kind: str) -> object:
+    """把表单原始字符串按 kind 解析成要落库的 Python 对象;失败抛 ValueError。"""
+    if kind == "int":
+        text_value = raw_form_value.strip()
+        if text_value == "":
+            raise ValueError("不能为空")
+        try:
+            return int(text_value)
+        except ValueError as e:
+            raise ValueError(f"请输入整数(收到: {text_value!r})") from e
+    if kind == "lines":
+        return [line.strip() for line in raw_form_value.splitlines() if line.strip()]
+    raise ValueError(f"未知 kind: {kind}")
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -110,12 +217,20 @@ def settings_page(
 ) -> HTMLResponse:
     _redirect_or_401(request, sb2099_admin)
     with _db.SessionLocal() as s:
-        rows = s.execute(select(Setting.key, Setting.value, Setting.updated_at)).all()
-    items = {r.key: (r.value, r.updated_at) for r in rows}
+        rows = s.execute(select(Setting.key, Setting.value)).all()
+    db_values = {r.key: r.value for r in rows}
+    items = []
+    for meta in _SETTING_META:
+        items.append(
+            {
+                **meta,
+                "value_text": _render_setting_value(db_values.get(meta["key"]), meta["kind"]),
+            }
+        )
     return templates.TemplateResponse(
         request=request,
         name="admin/settings.html",
-        context={"keys": _SETTING_KEYS, "items": items},
+        context={"items": items},
     )
 
 
@@ -133,10 +248,11 @@ async def settings_update(
             raw = form.get(key)
             if raw is None:
                 continue
+            kind = _SETTING_KIND[key]
             try:
-                parsed = json.loads(raw)
-            except json.JSONDecodeError as e:
-                errors.append(f"{key}: invalid JSON ({e})")
+                parsed = _parse_setting_input(str(raw), kind)
+            except ValueError as e:
+                errors.append(f"{key}: {e}")
                 continue
             s.execute(
                 update(Setting)

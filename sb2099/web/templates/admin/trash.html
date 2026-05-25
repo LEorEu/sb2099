@@ -1,29 +1,42 @@
 {% extends "admin/_layout.html" %}
-{% block title %}回收站 — sb2099 后台{% endblock %}
+{% block title %}回收站管理 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>回收站 ({{ items|length }})</h1>
+
+<div class="page-header-box animate-fade">
+  <h2>回收站管理 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">已被软删除/审核拒绝的投稿 (当前: {{ items|length }} 条) · 支持一键恢复或永久粉碎</span></h2>
+</div>
+
+<!-- Trash Cards List -->
 {% if not items %}
-  <p class="empty">回收站为空。</p>
+  <div class="glass-card empty animate-fade">
+    <p style="padding: 20px 0; color: var(--fg-subtle);">📁 回收站当前为空，暂无软删除记录。</p>
+  </div>
 {% else %}
-<ul class="admin-list">
-  {% for it in items %}
-    <li>
-      <div class="content">{{ it.content }}</div>
-      <div class="meta">
-        <span>#{{ it.id }}</span>
-        <span>tags: {{ it.tags }}</span>
-        <span>{{ it.submit_time }}</span>
-      </div>
-      <div class="actions">
-        <form method="post" action="/admin/barrage/{{ it.id }}/restore">
-          <button type="submit" class="primary">恢复</button>
-        </form>
-        <form method="post" action="/admin/barrage/{{ it.id }}/purge" onsubmit="return confirm('永久删除？此操作不可恢复。')">
-          <button type="submit" class="danger">永久删除</button>
-        </form>
-      </div>
-    </li>
-  {% endfor %}
-</ul>
+  <ul class="admin-list animate-fade">
+    {% for it in items %}
+      <li class="glass-card" style="margin-bottom: 16px; padding: 20px 24px;">
+        <div class="content" style="font-size: 15px; font-weight: 500; color: #fff; opacity: 0.7;">{{ it.content }}</div>
+        
+        <div class="meta" style="margin: 8px 0 16px;">
+          <span>ID: #{{ it.id }}</span>
+          <span>原 Tags: {{ it.tags }}</span>
+          <span>最初投稿时间: {{ it.submit_time }}</span>
+        </div>
+        
+        <div class="actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+          <!-- Restore Action -->
+          <form method="post" action="/admin/barrage/{{ it.id }}/restore" style="display: inline-block;">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px 16px; font-size: 12px; border-color: hsla(145, 65%, 45%, 0.4); color: var(--success);">恢复入库</button>
+          </form>
+          
+          <!-- Purge Action -->
+          <form method="post" action="/admin/barrage/{{ it.id }}/purge" onsubmit="return confirm('⚠️ 【警告】永久删除操作不可撤销！\n此操作将从数据库中彻底粉碎该条记录（并清除相关的反馈历史），确定吗？')" style="display: inline-block;">
+            <button type="submit" class="btn btn-secondary danger" style="padding: 6px 16px; font-size: 12px;">永久删除</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
 {% endif %}
+
 {% endblock %}

@@ -1,35 +1,68 @@
 {% extends "admin/_layout.html" %}
-{% block title %}直播热门 — sb2099 后台{% endblock %}
+{% block title %}直播热门发现管理 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>直播热门 ({{ items|length }} 行 · {{ '仅命中降噪' if filtered else '全部' }})</h1>
 
-<section class="admin-toolbar">
-  <a href="/admin/live_hot" class="{% if not filtered %}active{% endif %}">全部</a>
-  <a href="/admin/live_hot?filtered=true" class="{% if filtered %}active{% endif %}">仅命中降噪</a>
+<div class="page-header-box animate-fade">
+  <h2>直播热门发现管理 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">弹幕实时聚合统计监控 (当前: {{ items|length }} 条记录)</span></h2>
+</div>
+
+<!-- Admin toolbar and active switches -->
+<section class="admin-toolbar animate-fade" style="margin-bottom: 20px;">
+  <a href="/admin/live_hot" class="{% if not filtered %}active{% endif %}">📂 全部热门弹幕</a>
+  <a href="/admin/live_hot?filtered=true" class="{% if filtered %}active{% endif %}">🚫 仅看被降噪拦截</a>
+  
   <form method="post" action="/admin/live_hot/rescan" style="display:inline-block; margin-left:auto">
-    <button type="submit" class="primary">改完规则后重扫 is_filtered</button>
+    <button type="submit" class="btn btn-primary" style="font-size: 12px; padding: 6px 16px;">🔄 修改降噪规则后重扫 is_filtered</button>
   </form>
 </section>
+
+<!-- Feedback notes -->
 {% if request.query_params.get('rescan_ok') %}
-  <p class="ok-note">重扫完成：{{ request.query_params.get('rescan_ok') }}</p>
+  <div class="glass-card animate-fade" style="padding: 12px 20px; border-color: var(--success); background: hsla(145, 65%, 10%, 0.4); margin-bottom: 20px;">
+    <p style="color: var(--success); font-size: 13px; font-weight: 600;">✓ 重置扫描完成！具体结果：{{ request.query_params.get('rescan_ok') }}</p>
+  </div>
 {% endif %}
 
-<table class="admin-table">
-  <thead>
-    <tr><th>#</th><th>内容</th><th>24h</th><th>total</th><th>不同发送者</th><th>最近</th><th>命中</th></tr>
-  </thead>
-  <tbody>
-  {% for it in items %}
-    <tr>
-      <td><a href="/admin/live_hot/{{ it.id }}">#{{ it.id }}</a></td>
-      <td class="content">{{ it.content_sample }}</td>
-      <td>{{ it.send_cnt_24h }}</td>
-      <td>{{ it.send_cnt_total }}</td>
-      <td>{{ it.unique_sender_cnt_24h }}</td>
-      <td>{{ it.last_seen }}</td>
-      <td>{% if it.is_filtered %}<span class="bad">是</span>{% endif %}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<!-- Glass Table Card -->
+<div class="glass-card animate-fade" style="padding: 24px; animation-delay: 0.1s;">
+  {% if items %}
+    <div class="admin-table-container" style="margin-bottom: 0;">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 8%;">ID</th>
+            <th style="width: 45%;">弹幕正文样本</th>
+            <th style="width: 8%;">24h 次数</th>
+            <th style="width: 8%;">累计次数</th>
+            <th style="width: 10%;">24h 唯一发送者</th>
+            <th style="width: 13%;">最近捕获时间</th>
+            <th style="width: 8%;">是否被屏蔽</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for it in items %}
+          <tr class="{% if it.is_filtered %}promoted{% endif %}" style="{% if it.is_filtered %}border-left: 2px solid var(--error); background: hsla(354, 75%, 55%, 0.02);{% endif %}">
+            <td style="font-family: var(--font-mono); font-size:12px; vertical-align: middle;"><a href="/admin/live_hot/{{ it.id }}" style="color: var(--accent); font-weight:600; text-decoration:none;">#{{ it.id }}</a></td>
+            <td class="content" style="vertical-align: middle; font-weight: 500;">{{ it.content_sample }}</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_24h }}</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_total }}</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.unique_sender_cnt_24h }} 人</td>
+            <td style="vertical-align: middle; font-size:11px; color: var(--fg-subtle);">{{ it.last_seen }}</td>
+            <td style="vertical-align: middle;">
+              {% if it.is_filtered %}
+                <span class="script-badge" style="background: hsla(354, 75%, 55%, 0.15); color: var(--error); border-color: hsla(354, 75%, 55%, 0.3)">已过滤</span>
+              {% else %}
+                <span class="script-badge" style="background: hsla(145, 65%, 45%, 0.15); color: var(--success); border-color: hsla(145, 65%, 45%, 0.3)">公开</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty" style="padding: 20px 0;">当前暂无抓取聚合的热门弹幕。</p>
+  {% endif %}
+</div>
+
 {% endblock %}

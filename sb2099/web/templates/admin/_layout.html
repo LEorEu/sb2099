@@ -3,32 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}sb2099 后台{% endblock %}</title>
+  <title>{% block title %}sb2099 后台控制板{% endblock %}</title>
   <link rel="stylesheet" href="/static/sb2099.css">
 </head>
 <body class="admin">
   <script src="/static/sb2099.js" defer></script>
+  
+  <!-- Premium Admin Navbar -->
   <header class="topbar">
     <a class="brand" href="/admin/settings">sb2099 · 后台</a>
     <nav>
       <a href="/admin/settings" class="{% if request.url.path == '/admin/settings' %}active{% endif %}">设置</a>
-      <a href="/admin/tags" class="{% if request.url.path == '/admin/tags' %}active{% endif %}">Tag</a>
+      <a href="/admin/tags" class="{% if request.url.path == '/admin/tags' %}active{% endif %}">标签字典</a>
       <a href="/admin/barrage/pending" class="{% if request.url.path == '/admin/barrage/pending' %}active{% endif %}">待审</a>
       <a href="/admin/barrage/reports" class="{% if request.url.path == '/admin/barrage/reports' %}active{% endif %}">反馈</a>
-      <a href="/admin/live_hot" class="{% if request.url.path == '/admin/live_hot' %}active{% endif %}">直播热门</a>
+      <a href="/admin/live_hot" class="{% if request.url.path.startswith('/admin/live_hot') %}active{% endif %}">直播热门</a>
       <a href="/admin/barrage/_trash" class="{% if request.url.path == '/admin/barrage/_trash' %}active{% endif %}">回收站</a>
-      <a href="/admin/stats" class="{% if request.url.path == '/admin/stats' %}active{% endif %}">统计</a>
-      <a href="/" class="us">→ 前台</a>
+      <a href="/admin/stats" class="{% if request.url.path == '/admin/stats' %}active{% endif %}">系统统计</a>
+      <a href="/" class="us">→ 返回主站</a>
       <form method="post" action="/admin/logout" style="display:inline">
-        <button type="submit" class="logout">登出</button>
+        <button type="submit" class="logout">安全登出</button>
       </form>
     </nav>
   </header>
+
+  <!-- Content body container -->
   <main>
     {% block content %}{% endblock %}
   </main>
+
+  <!-- Footer block -->
   <footer class="foot">
-    <span>sb2099 后台 · 仅记录 IP 哈希 · 原始弹幕 30 天清</span>
+    <span>sb2099 后台管理控制面板 · 隐私与合规守护模式已激活</span>
+    <span>原始弹幕 30 天自动清理</span>
   </footer>
 </body>
 </html>

@@ -1,48 +1,80 @@
 {% extends "admin/_layout.html" %}
-{% block title %}Tag 字典 — sb2099 后台{% endblock %}
+{% block title %}标签字典管理 — sb2099 后台{% endblock %}
 {% block content %}
-<h1>Tag 字典</h1>
 
-<section class="admin-form">
-  <h3>新增 tag</h3>
-  <form method="post" action="/admin/tags">
-    <input type="text" name="value" placeholder="value (00-zz)" maxlength="8" pattern="[0-9A-Za-z]{1,8}" required>
-    <input type="text" name="label" placeholder="显示名" required>
-    <input type="text" name="icon_url" placeholder="icon URL（可空）">
-    <input type="number" name="sort" placeholder="排序" value="0">
-    <button type="submit">新增</button>
+<div class="page-header-box animate-fade">
+  <h2>标签字典管理 <span style="font-size: 13px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">投稿库分类标签 (Tag) 的添加、修改与停用管理</span></h2>
+</div>
+
+<!-- Glass Form: Create New Tag -->
+<section class="glass-card admin-form animate-fade" style="padding: 24px;">
+  <h3 style="font-family: var(--font-display); font-size: 16px; font-weight:600; margin-bottom: 16px; color:#fff;">新增分类标签</h3>
+  <form method="post" action="/admin/tags" style="gap: 12px;">
+    <input type="text" name="value" placeholder="标签值 (例如 03, 04, a1, max 8字)" maxlength="8" pattern="[0-9A-Za-z]{1,8}" required style="flex: 1; min-width: 140px;">
+    <input type="text" name="label" placeholder="标签显示名称 (例如 主播, 互动)" required style="flex: 1; min-width: 140px;">
+    <input type="text" name="icon_url" placeholder="图标图片 URL (可空)" style="flex: 1.5; min-width: 200px;">
+    <input type="number" name="sort" placeholder="排序权重" value="0" style="width: 100px;">
+    <button type="submit" class="btn btn-primary" style="padding: 8px 24px;">+ 添加标签</button>
   </form>
 </section>
 
-<table class="admin-table">
-  <thead>
-    <tr><th>value</th><th>label</th><th>icon</th><th>sort</th><th>enabled</th><th>操作</th></tr>
-  </thead>
-  <tbody>
-  {% for t in tags %}
-    <tr>
-      <form method="post" action="/admin/tags/{{ t.value }}/update">
-        <td><code>{{ t.value }}</code></td>
-        <td><input type="text" name="label" value="{{ t.label }}" required></td>
-        <td><input type="text" name="icon_url" value="{{ t.icon_url or '' }}"></td>
-        <td><input type="number" name="sort" value="{{ t.sort }}" style="width:60px"></td>
-        <td>
-          <select name="enabled">
-            <option value="1" {% if t.enabled %}selected{% endif %}>启用</option>
-            <option value="0" {% if not t.enabled %}selected{% endif %}>禁用</option>
-          </select>
-        </td>
-        <td>
-          <button type="submit">保存</button>
-        </td>
-      </form>
-      <td>
-        <form method="post" action="/admin/tags/{{ t.value }}/delete" onsubmit="return confirm('删除 tag {{ t.value }}？')">
-          <button type="submit" class="danger">删除</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<!-- Glass Table: List & Edit Tags -->
+<div class="glass-card animate-fade" style="padding: 24px; animation-delay: 0.1s;">
+  <h3 style="font-family: var(--font-display); font-size: 16px; font-weight:600; margin-bottom: 16px; color:#fff;">已有标签列表及修改</h3>
+  
+  {% if tags %}
+    <div class="admin-table-container" style="margin-bottom: 0;">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 10%;">标签值</th>
+            <th style="width: 25%;">显示名称</th>
+            <th style="width: 25%;">图标链接</th>
+            <th style="width: 12%;">排序权重</th>
+            <th style="width: 13%;">启用状态</th>
+            <th style="width: 15%;">操作栏</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t in tags %}
+          <tr>
+            <!-- Update form wrapper. In HTML5, we wrap tds or use form attribute, but existing template structures are inside tr. We preserve SQLAlchemy bind mappings exactly. -->
+            <td style="font-family: var(--font-mono); font-size:12px; vertical-align: middle; color:var(--accent);">{{ t.value }}</td>
+            
+            <form method="post" action="/admin/tags/{{ t.value }}/update" id="form-update-{{ t.value }}">
+              <td style="vertical-align: middle;">
+                <input type="text" name="label" value="{{ t.label }}" required style="width: 100%;">
+              </td>
+              <td style="vertical-align: middle;">
+                <input type="text" name="icon_url" value="{{ t.icon_url or '' }}" placeholder="无图标" style="width: 100%;">
+              </td>
+              <td style="vertical-align: middle;">
+                <input type="number" name="sort" value="{{ t.sort }}" style="width: 80px;">
+              </td>
+              <td style="vertical-align: middle;">
+                <select name="enabled" style="width: 100%;">
+                  <option value="1" {% if t.enabled %}selected{% endif %}>启用状态</option>
+                  <option value="0" {% if not t.enabled %}selected{% endif %}>停用禁用</option>
+                </select>
+              </td>
+              <td style="vertical-align: middle;">
+                <div style="display: flex; gap: 4px;">
+                  <button type="submit" form="form-update-{{ t.value }}" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;">保存</button>
+            </form>
+                  
+                  <form method="post" action="/admin/tags/{{ t.value }}/delete" onsubmit="return confirm('⚠️ 确定要彻底删除该标签「{{ t.value }}」吗？\n删除可能导致正式库中包含此 tag 的条目分类发生变化！')" style="display:inline;">
+                    <button type="submit" class="btn btn-secondary danger" style="padding: 4px 10px; font-size: 11px;">删除</button>
+                  </form>
+                </div>
+              </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty" style="padding: 20px 0;">当前标签字典中没有任何分类标签，请在上方进行添加。</p>
+  {% endif %}
+</div>
+
 {% endblock %}
