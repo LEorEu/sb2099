@@ -553,6 +553,62 @@ def live_hot_detail(
     )
 
 
+@router.post("/live_hot/recompute")
+def live_hot_recompute(
+    request: Request,
+    sb2099_admin: str | None = Cookie(default=None),
+):
+    """重 normalize 所有 raw_danmaku → 重建 live_hot 聚合。
+    用于规则变更(如重复折叠)后,把历史 N 个变体合并到一条 base。
+    """
+    from ..ingest.aggregator import should_filter
+    from ..normalize import normalize
+
+    _redirect_or_401(request, sb2099_admin)
+    settings_cache.invalidate()
+    with _db.SessionLocal() as s:
+        # 1) 重 normalize 所有 raw_danmaku.content_norm
+        rows = s.execute(
+            select(RawDanmaku.id, RawDanmaku.content_raw, RawDanmaku.content_norm)
+        ).all()
+        n_raw_updated = 0
+        for rid, raw, old_norm in rows:
+            new_norm = normalize(raw or "")
+            if new_norm != old_norm:
+                s.execute(
+                    update(RawDanmaku).where(RawDanmaku.id == rid).values(content_norm=new_norm)
+                )
+                n_raw_updated += 1
+        # 2) 清空 live_hot,从 raw 重新聚合
+        s.execute(text("DELETE FROM live_hot"))
+        s.execute(
+            text(
+                "INSERT INTO live_hot(content_norm, content_sample, first_seen, last_seen, "
+                "send_cnt_total, send_cnt_24h, send_cnt_7d, "
+                "unique_sender_cnt_24h, unique_sender_cnt_7d, is_filtered) "
+                "SELECT content_norm, "
+                "  (SELECT content_raw FROM raw_danmaku r2 WHERE r2.content_norm = r.content_norm ORDER BY ts DESC LIMIT 1), "
+                "  MIN(ts), MAX(ts), COUNT(*), 0, 0, 0, 0, 0 "
+                "FROM raw_danmaku r WHERE content_norm <> '' GROUP BY content_norm"
+            )
+        )
+        # 3) 重算 is_filtered
+        live_rows = s.execute(select(LiveHot.id, LiveHot.content_norm)).all()
+        n_filtered = 0
+        for hot_id, cn in live_rows:
+            if should_filter(cn):
+                s.execute(update(LiveHot).where(LiveHot.id == hot_id).values(is_filtered=True))
+                n_filtered += 1
+        s.commit()
+    # 4) 触发一次 recount 把 24h/7d/unique 重算
+    from ..cron import _recount_sync
+    _recount_sync()
+    return RedirectResponse(
+        url=f"/admin/live_hot?recompute_ok={n_raw_updated}_raw_renorm_{len(live_rows)}_aggregated_{n_filtered}_filtered",
+        status_code=303,
+    )
+
+
 @router.post("/live_hot/rescan")
 def live_hot_rescan(
     request: Request,

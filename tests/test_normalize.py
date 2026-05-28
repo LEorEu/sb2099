@@ -50,3 +50,29 @@ def test_normalize_dedup_targets():
 def test_normalize_keeps_case_distinct():
     """大小写不归一：去重不应合并。"""
     assert normalize("GG") != normalize("gg")
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        # 整串严格周期 → 折叠到最短 base
+        ("晚安晚安晚安", "晚安"),
+        ("宝宝你好可爱啊宝宝你好可爱啊", "宝宝你好可爱啊"),
+        ("🔇😎🔇享受🔇😎🔇享受", "🔇😎🔇享受"),
+        ("天才😲👍天才😲👍天才😲👍", "天才😲👍"),
+        # 带尾缀 → 不折叠
+        ("宝宝你好可爱啊Oᴗoಣ", "宝宝你好可爱啊Oᴗoಣ"),
+        ("晚安晚安宝贝", "晚安晚安宝贝"),
+        # 偶数倍单字仍可折叠到 2 字 block(等价于"重复字符自身")
+        ("啊啊啊啊", "啊啊"),
+        ("8888", "88"),
+        # 奇数倍 block 长度 1 无法折叠
+        ("aaa", "aaa"),
+        # 不是严格周期 不折叠
+        ("晚安晚安晚", "晚安晚安晚"),
+        ("ABABAB", "AB"),  # block "AB" 长度 2,折叠到 AB
+        ("ABAB", "AB"),
+    ],
+)
+def test_collapse_repeat(raw: str, expected: str) -> None:
+    assert normalize(raw) == expected

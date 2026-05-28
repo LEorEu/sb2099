@@ -12,14 +12,23 @@
   <a href="/admin/live_hot?filtered=true" class="{% if filtered %}active{% endif %}">🚫 仅看被降噪拦截</a>
   
   <form method="post" action="/admin/live_hot/rescan" style="display:inline-block; margin-left:auto">
-    <button type="submit" class="btn btn-primary" style="font-size: 12px; padding: 6px 16px;">🔄 修改降噪规则后重扫 is_filtered</button>
+    <button type="submit" class="btn btn-secondary" style="font-size: 12px; padding: 6px 16px;" title="按当前规则重新扫每条 live_hot 的 is_filtered (快)">🔄 重扫 is_filtered</button>
+  </form>
+  <form method="post" action="/admin/live_hot/recompute" style="display:inline-block;"
+        onsubmit="return confirm('将重新规范化所有 raw_danmaku 并清空重建 live_hot 聚合。\n用于 normalize 规则改变后(如重复段折叠)合并历史变体。\n可能耗时 5 – 30 秒。继续?')">
+    <button type="submit" class="btn btn-primary" style="font-size: 12px; padding: 6px 16px;">🧱 重新聚合 live_hot</button>
   </form>
 </section>
 
 <!-- Feedback notes -->
 {% if request.query_params.get('rescan_ok') %}
   <div class="glass-card animate-fade" style="padding: 12px 20px; border-color: var(--success); background: hsla(145, 65%, 10%, 0.4); margin-bottom: 20px;">
-    <p style="color: var(--success); font-size: 13px; font-weight: 600;">✓ 重置扫描完成！具体结果：{{ request.query_params.get('rescan_ok') }}</p>
+    <p style="color: var(--success); font-size: 13px; font-weight: 600;">✓ 重扫完成: {{ request.query_params.get('rescan_ok') }}</p>
+  </div>
+{% endif %}
+{% if request.query_params.get('recompute_ok') %}
+  <div class="glass-card animate-fade" style="padding: 12px 20px; border-color: var(--success); background: hsla(145, 65%, 10%, 0.4); margin-bottom: 20px;">
+    <p style="color: var(--success); font-size: 13px; font-weight: 600;">✓ 重新聚合完成: {{ request.query_params.get('recompute_ok') }}</p>
   </div>
 {% endif %}
 
