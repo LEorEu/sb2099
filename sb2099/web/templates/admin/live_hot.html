@@ -47,7 +47,7 @@
             <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_24h }}</td>
             <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_total }}</td>
             <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.unique_sender_cnt_24h }} 人</td>
-            <td style="vertical-align: middle; font-size:11px; color: var(--fg-subtle);">{{ it.last_seen }}</td>
+            <td style="vertical-align: middle; font-size:11px; color: var(--fg-subtle);">{{ it.last_seen | cst_long }}</td>
             <td style="vertical-align: middle;">
               {% if it.is_filtered %}
                 <span class="script-badge" style="background: hsla(354, 75%, 55%, 0.15); color: var(--error); border-color: hsla(354, 75%, 55%, 0.3)">已过滤</span>

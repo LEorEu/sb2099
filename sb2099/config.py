@@ -40,6 +40,7 @@ def get_settings() -> Settings:
 # setting 表首次启动种子值；后续以 DB 为准
 DEFAULTS: dict[str, object] = {
     "live_hot_min_unique_senders_24h": 3,
+    "live_hot_min_length": 2,
     "live_noise_filters": ["晚安", "88888", "爆了", "+1"],
     "submission_review_rules": [],
     "barrage_min_length": 4,

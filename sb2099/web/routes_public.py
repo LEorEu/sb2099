@@ -12,11 +12,14 @@ from sqlalchemy import select, text
 from .. import db as _db
 from ..models import Tag
 from ..search import search_barrage
+from ..settings import settings_cache
+from ._filters import register_filters
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _USERSCRIPT_PATH = Path(__file__).parent.parent / "userscript" / "sb2099.user.js"
 
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
+register_filters(templates)
 
 router = APIRouter()
 
@@ -75,16 +78,17 @@ async def live_page(
         if window == "day"
         else ("send_cnt_7d", "unique_sender_cnt_7d", 50)
     )
+    min_unique = int(settings_cache.get("live_hot_min_unique_senders_24h", 3) or 0)
     sql = text(
         f"SELECT lh.id, lh.content_sample, lh.{cnt_col} AS send_cnt, lh.{uniq_col} AS unique_senders, "
         f"lh.last_seen, b.id AS barrage_id, b.tags AS barrage_tags "
         f"FROM live_hot lh "
         f"LEFT JOIN barrage b ON b.content_norm = lh.content_norm AND b.status = 'active' "
-        f"WHERE lh.is_filtered=0 "
+        f"WHERE lh.is_filtered=0 AND lh.{uniq_col} >= :min_unique "
         f"ORDER BY lh.{cnt_col} DESC, lh.last_seen DESC LIMIT :limit"
     )
     with _db.SessionLocal() as s:
-        rows = s.execute(sql, {"limit": limit}).mappings().all()
+        rows = s.execute(sql, {"limit": limit, "min_unique": min_unique}).mappings().all()
     items = [
         {
             "id": r["id"],

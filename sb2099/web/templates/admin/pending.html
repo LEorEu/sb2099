@@ -21,7 +21,7 @@
           <span style="color: var(--warning); border-color: hsla(38, 92%, 50%, 0.3); background: hsla(38, 92%, 50%, 0.05); font-weight: 600;"># 待审条目</span>
           <span>ID: #{{ it.id }}</span>
           <span>原分类 Tags: {{ it.tags }}</span>
-          <span>提交时间: {{ it.submit_time }}</span>
+          <span>提交时间: {{ it.submit_time | cst_long }}</span>
         </div>
         
         <div class="actions" style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">

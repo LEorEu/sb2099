@@ -15,8 +15,8 @@
   <div class="meta" style="margin-top: 16px;">
     <span>归一化哈希 (content_norm): <code style="font-family: var(--font-mono); color: var(--accent);">{{ hot.content_norm }}</code></span>
     <span>累计发送数: {{ hot.send_cnt_total }} 次</span>
-    <span>首次捕获: {{ hot.first_seen }}</span>
-    <span>最近捕获: {{ hot.last_seen }}</span>
+    <span>首次捕获: {{ hot.first_seen | cst_long }}</span>
+    <span>最近捕获: {{ hot.last_seen | cst_long }}</span>
     <span>是否被过滤: {% if hot.is_filtered %}已过滤限制{% else %}公开正常{% endif %}</span>
   </div>
 </div>
@@ -74,7 +74,7 @@
                   <strong style="color:#fff;">{{ r.nickname or '-' }}</strong>
                   <div style="font-size: 10px; color: var(--fg-subtle); font-family: var(--font-mono);">UID: {{ r.uid or '-' }}</div>
                 </td>
-                <td style="font-size: 10px; color: var(--fg-subtle); vertical-align: middle;">{{ r.ts }}</td>
+                <td style="font-size: 10px; color: var(--fg-subtle); vertical-align: middle;">{{ r.ts | cst_long }}</td>
                 <td class="content" style="font-size: 12px; vertical-align: middle;">{{ r.content_raw }}</td>
               </tr>
             {% endfor %}

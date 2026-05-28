@@ -22,7 +22,7 @@
           <span>ID: #{{ it.id }}</span>
           <span>Tags: {{ it.tags }}</span>
           <span>状态: {{ it.status }}</span>
-          <span>最近一次被反馈: {{ it.last_report }}</span>
+          <span>最近一次被反馈: {{ it.last_report | cst_long }}</span>
         </div>
         
         <div class="actions" style="display: flex; gap: 8px; justify-content: flex-end;">

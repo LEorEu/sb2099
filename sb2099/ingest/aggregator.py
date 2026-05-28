@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import unicodedata
 from datetime import datetime, timezone
 
 from sqlalchemy import select, update
@@ -19,12 +20,31 @@ from ..settings import settings_cache
 
 log = logging.getLogger(__name__)
 
-__all__ = ["persist_chat_event"]
+__all__ = ["persist_chat_event", "should_filter"]
 
 
-def _is_noise(content_raw: str) -> bool:
+def _noise_match(content_norm: str) -> bool:
+    """整句精确匹配:content_norm 完全等于 normalize 后的任一关键词。"""
     filters = settings_cache.get("live_noise_filters", []) or []
-    return any(kw and kw in content_raw for kw in filters)
+    normed = {normalize(kw) for kw in filters if kw}
+    normed.discard("")
+    return content_norm in normed
+
+
+def _is_low_quality(content_norm: str, min_length: int) -> bool:
+    """太短 / 不含任一字母(汉字、英文、日文等)的内容,标 is_filtered。"""
+    if len(content_norm) < min_length:
+        return True
+    for ch in content_norm:
+        if unicodedata.category(ch).startswith("L"):
+            return False
+    return True
+
+
+def should_filter(content_norm: str) -> bool:
+    """聚合所有"应当标 is_filtered=1"的判断。供 rescan 复用。"""
+    min_length = int(settings_cache.get("live_hot_min_length", 2) or 2)
+    return _is_low_quality(content_norm, min_length) or _noise_match(content_norm)
 
 
 def _persist_sync(evt: dict) -> None:
@@ -39,7 +59,7 @@ def _persist_sync(evt: dict) -> None:
     if not content_norm:
         return
 
-    is_noise = _is_noise(content_raw)
+    is_noise = should_filter(content_norm)
 
     with _db.SessionLocal() as session:
         session.execute(

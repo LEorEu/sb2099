@@ -20,7 +20,7 @@
         <div class="meta" style="margin: 8px 0 16px;">
           <span>ID: #{{ it.id }}</span>
           <span>原 Tags: {{ it.tags }}</span>
-          <span>最初投稿时间: {{ it.submit_time }}</span>
+          <span>最初投稿时间: {{ it.submit_time | cst_long }}</span>
         </div>
         
         <div class="actions" style="display: flex; gap: 8px; justify-content: flex-end;">

@@ -33,7 +33,7 @@
             🔥 ×{{ it.send_cnt }} 次发送
           </span>
           <span>👥 {{ it.unique_senders }} 人发送</span>
-          <span>最近捕获: {{ it.last_seen }}</span>
+          <span>最近捕获: {{ it.last_seen | cst }}</span>
         </div>
         
         <!-- Desktop Hover Tooltip for promoted items -->

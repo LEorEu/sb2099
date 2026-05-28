@@ -18,10 +18,12 @@ from sqlalchemy import delete, desc, func, select, text, update
 from .. import db as _db
 from ..models import Barrage, BarrageReport, LiveHot, RawDanmaku, Setting, Tag
 from ..settings import settings_cache
+from ._filters import register_filters
 from .admin_auth import COOKIE_MAX_AGE, COOKIE_NAME, require_admin, verify_token
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
+register_filters(templates)
 
 router = APIRouter(prefix="/admin")
 
@@ -101,6 +103,14 @@ _SETTING_META: list[dict[str, object]] = [
         "kind": "int",
         "default": 3,
         "hint": "整数,建议 3 – 10",
+    },
+    {
+        "key": "live_hot_min_length",
+        "label": "直播热门最短字数",
+        "desc": "归一化后短于此长度,或全是数字/标点/emoji 的弹幕直接进入「过滤」分组",
+        "kind": "int",
+        "default": 2,
+        "hint": "整数,建议 2 – 4",
     },
     {
         "key": "live_noise_filters",
@@ -540,27 +550,19 @@ def live_hot_rescan(
     request: Request,
     sb2099_admin: str | None = Cookie(default=None),
 ):
-    """改完 live_noise_filters 后调一次：扫所有 live_hot，重算 is_filtered。
-
-    复用 tools/backfill_live_hot 的核心思路：对每个 content_norm，看其下任一
-    raw_danmaku.content_raw 是否命中当前规则的子串。
+    """改完 live_noise_filters / live_hot_min_length 后调一次:
+    扫所有 live_hot,按当前规则(整句精确匹配 + 长度/字符过滤)重算 is_filtered。
     """
+    from ..ingest.aggregator import should_filter
+
     _redirect_or_401(request, sb2099_admin)
     settings_cache.invalidate()
-    filters = settings_cache.get("live_noise_filters", []) or []
     n_filtered = 0
     n_unfiltered = 0
     with _db.SessionLocal() as s:
         rows = s.execute(select(LiveHot.id, LiveHot.content_norm)).all()
         for hot_id, cn in rows:
-            raws = (
-                s.execute(
-                    select(RawDanmaku.content_raw).where(RawDanmaku.content_norm == cn)
-                )
-                .scalars()
-                .all()
-            )
-            hit = any(any(kw and kw in r for kw in filters) for r in raws) if filters else False
+            hit = should_filter(cn)
             s.execute(update(LiveHot).where(LiveHot.id == hot_id).values(is_filtered=hit))
             if hit:
                 n_filtered += 1

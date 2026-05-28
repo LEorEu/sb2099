@@ -312,7 +312,7 @@ def test_live_hot_filtered_toggle(admin_client):
 
 
 def test_live_hot_rescan_recomputes(admin_client):
-    """改 noise_filters → 重扫 → is_filtered 立即跟着变。"""
+    """改 noise_filters → 重扫 → is_filtered 立即跟着变(整句精确匹配)。"""
     from sb2099.settings import settings_cache
 
     now = datetime.utcnow()
@@ -336,11 +336,11 @@ def test_live_hot_rescan_recomputes(admin_client):
                 content_norm="奇怪内容",
             )
         )
-        # 改 setting → "奇怪" 关键词
+        # 改 setting → 整句精确关键词
         s.execute(
             Setting.__table__.update()
             .where(Setting.key == "live_noise_filters")
-            .values(value=json.dumps(["奇怪"]), updated_at=now)
+            .values(value=json.dumps(["奇怪内容"]), updated_at=now)
         )
         s.commit()
     settings_cache.invalidate()

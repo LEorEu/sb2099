@@ -59,7 +59,7 @@
               <span>#{{ item.id }}</span>
               <span>tags: {{ item.tags }}</span>
               <span>复制 {{ item.cnt }}</span>
-              <span>{{ item.submit_time }}</span>
+              <span>{{ item.submit_time | cst_long }}</span>
             </div>
             <div class="actions">
               <button class="primary"
