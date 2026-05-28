@@ -2,18 +2,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* HSL Tailored Harmonious Colors */
+  /* === Dark theme (default) === */
   --bg-base: hsl(220, 24%, 6%);
   --bg-surface: hsl(220, 24%, 10%);
   --bg-surface-hover: hsl(220, 24%, 14%);
   --bg-glass: hsla(220, 24%, 10%, 0.75);
   --bg-glass-active: hsla(220, 24%, 16%, 0.85);
-  
+  --bg-input: rgba(0, 0, 0, 0.25);
+  --bg-input-strong: rgba(0, 0, 0, 0.35);
+  --bg-elev: rgba(255, 255, 255, 0.02);
+  --bg-elev-hover: rgba(255, 255, 255, 0.05);
+
   --border: hsla(220, 20%, 20%, 0.5);
   --border-focus: hsla(14, 100%, 57%, 0.6);
   --border-light: hsla(220, 20%, 40%, 0.15);
-  
+
   --fg: hsl(220, 20%, 94%);
+  --fg-strong: #fff;
   --fg-muted: hsl(220, 15%, 68%);
   --fg-subtle: hsl(220, 10%, 45%);
 
@@ -28,15 +33,44 @@
   --error: hsl(354, 75%, 55%);
   --warning: hsl(38, 92%, 50%);
   --promoted-glow: hsla(145, 65%, 45%, 0.15);
-  
+
+  --bg-radial-1: hsla(272, 85%, 60%, 0.08);
+  --bg-radial-2: hsla(14, 100%, 57%, 0.08);
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
   --font-display: 'Outfit', var(--font-sans);
-  
+
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === Light theme override === */
+:root[data-theme="light"] {
+  --bg-base: hsl(220, 25%, 97%);
+  --bg-surface: hsl(0, 0%, 100%);
+  --bg-surface-hover: hsl(220, 20%, 93%);
+  --bg-glass: hsla(0, 0%, 100%, 0.78);
+  --bg-glass-active: hsla(220, 20%, 96%, 0.92);
+  --bg-input: rgba(255, 255, 255, 0.7);
+  --bg-input-strong: rgba(255, 255, 255, 0.95);
+  --bg-elev: rgba(0, 0, 0, 0.03);
+  --bg-elev-hover: rgba(0, 0, 0, 0.06);
+
+  --border: hsla(220, 15%, 65%, 0.35);
+  --border-light: hsla(220, 15%, 55%, 0.18);
+
+  --fg: hsl(220, 30%, 14%);
+  --fg-strong: hsl(220, 32%, 8%);
+  --fg-muted: hsl(220, 15%, 38%);
+  --fg-subtle: hsl(220, 10%, 52%);
+
+  --glass-glow: 0 6px 24px 0 rgba(0, 0, 0, 0.08);
+
+  --bg-radial-1: hsla(272, 85%, 60%, 0.05);
+  --bg-radial-2: hsla(14, 100%, 57%, 0.05);
 }
 
 /* Base Styles */
@@ -53,11 +87,12 @@ body {
   color: var(--fg);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(272, 85%, 60%, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, hsla(14, 100%, 57%, 0.08) 0px, transparent 50%);
+  background-image:
+    radial-gradient(at 0% 0%, var(--bg-radial-1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, var(--bg-radial-2) 0px, transparent 50%);
   background-attachment: fixed;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Beautiful Custom Scrollbar */
@@ -79,10 +114,10 @@ body {
 
 /* Layout */
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 32px;
+  padding: 14px 32px;
   background: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -91,7 +126,12 @@ body {
   top: 0;
   z-index: 100;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  gap: 16px;
 }
+
+.topbar-left { justify-self: start; display: flex; align-items: center; gap: 12px; }
+.topbar-center { justify-self: center; display: flex; align-items: center; gap: 6px; }
+.topbar-right { justify-self: end; display: flex; align-items: center; gap: 8px; }
 
 .brand {
   font-family: var(--font-display);
@@ -122,7 +162,7 @@ body {
 .topbar nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .topbar nav a {
@@ -137,7 +177,7 @@ body {
 
 .topbar nav a:hover {
   color: var(--fg);
-  background: hsla(220, 20%, 90%, 0.05);
+  background: var(--bg-elev-hover);
 }
 
 .topbar nav a.active {
@@ -147,7 +187,7 @@ body {
 }
 
 .topbar nav a.us {
-  margin-left: 16px;
+  margin-left: 8px;
   border: 1px solid var(--accent);
   color: var(--accent);
   font-weight: 600;
@@ -156,6 +196,44 @@ body {
   background: var(--accent);
   color: #fff;
   box-shadow: var(--accent-glow);
+}
+
+/* Icon buttons on the right side of topbar */
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: var(--transition);
+  padding: 0;
+  font-family: inherit;
+}
+.icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: hsla(14, 100%, 57%, 0.06);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.icon-btn svg { width: 18px; height: 18px; display: block; }
+.icon-btn .icon-moon { display: none; }
+:root[data-theme="light"] .icon-btn .icon-sun { display: none; }
+:root[data-theme="light"] .icon-btn .icon-moon { display: block; }
+
+@media (max-width: 720px) {
+  .topbar { grid-template-columns: auto 1fr auto; padding: 12px 16px; gap: 8px; }
+  .topbar-center { font-size: 13px; }
+  .topbar nav a { padding: 6px 10px; font-size: 13px; }
+  .icon-btn { width: 34px; height: 34px; }
 }
 
 main {
@@ -247,7 +325,7 @@ button, .btn {
 
 .btn-primary, button[type="submit"] {
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--fg-strong);
   box-shadow: var(--accent-glow);
 }
 
@@ -262,13 +340,13 @@ button, .btn {
 }
 
 .btn-secondary {
-  background: hsla(220, 20%, 90%, 0.05);
+  background: var(--bg-elev-hover);
   border-color: var(--border);
   color: var(--fg);
 }
 
 .btn-secondary:hover {
-  background: hsla(220, 20%, 90%, 0.1);
+  background: var(--bg-glass-active);
   border-color: var(--fg-muted);
 }
 
@@ -299,7 +377,7 @@ button, .btn {
   font-family: var(--font-display);
   font-size: 20px;
   font-weight: 600;
-  color: #fff;
+  color: var(--fg-strong);
 }
 
 .script-badge {
@@ -336,12 +414,12 @@ button, .btn {
   font-family: var(--font-display);
   font-size: 16px;
   margin-bottom: 12px;
-  color: #fff;
+  color: var(--fg-strong);
 }
 .submit-form textarea {
   width: 100%;
   min-height: 80px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 12px;
@@ -355,7 +433,7 @@ button, .btn {
 .submit-form textarea:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 10px hsla(14, 100%, 57%, 0.15);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-input-strong);
   outline: none;
 }
 
@@ -373,7 +451,7 @@ button, .btn {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   font-size: 12px;
   font-weight: 500;
@@ -383,7 +461,7 @@ button, .btn {
 }
 
 .tag-pick label:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-elev-hover);
   color: var(--fg);
 }
 
@@ -445,7 +523,7 @@ button, .btn {
 }
 
 .random-card {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-input);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
   padding: 20px;
@@ -461,7 +539,7 @@ button, .btn {
 }
 
 .random-card:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-input-strong);
   border-color: var(--accent);
   transform: scale(1.01);
 }
@@ -488,7 +566,7 @@ button, .btn {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #fff;
+  color: var(--fg-strong);
 }
 
 /* Meme Cards/List */
@@ -541,8 +619,8 @@ button, .btn {
 .meta > span {
   display: inline-flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-light);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -557,15 +635,15 @@ button, .btn {
   padding: 5px 12px;
   font-size: 11px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   color: var(--fg-muted);
 }
 
 .actions button:hover {
-  color: #fff;
+  color: var(--fg-strong);
   border-color: var(--fg-muted);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elev-hover);
 }
 
 .actions button.primary {
@@ -599,7 +677,7 @@ button, .btn {
 
 .console-bar input[type="text"] {
   flex: 1;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--fg);
   padding: 10px 16px;
@@ -639,7 +717,7 @@ button, .btn {
 .chip {
   display: inline-block;
   padding: 4px 12px;
-  background: hsla(220, 20%, 90%, 0.03);
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 99px;
   font-size: 12px;
@@ -649,14 +727,14 @@ button, .btn {
 }
 
 .chip:hover {
-  background: hsla(220, 20%, 90%, 0.06);
+  background: var(--bg-elev-hover);
   color: var(--fg);
 }
 
 .chip.active {
   background: hsla(14, 100%, 57%, 0.15);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--fg-strong);
   box-shadow: 0 0 10px hsla(14, 100%, 57%, 0.15);
 }
 
@@ -726,14 +804,14 @@ button, .btn {
   align-items: center;
   padding: 18px 24px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0,0,0,0.1);
+  background: var(--bg-elev);
 }
 
 .modal-header h3 {
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--fg-strong);
 }
 
 .modal-close {
@@ -747,7 +825,7 @@ button, .btn {
 }
 
 .modal-close:hover {
-  color: #fff;
+  color: var(--fg-strong);
 }
 
 .modal-body {
@@ -760,7 +838,7 @@ button, .btn {
   font-size: 15px;
   font-weight: 600;
   margin-bottom: 14px;
-  color: #fff;
+  color: var(--fg-strong);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -780,7 +858,7 @@ button, .btn {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -789,7 +867,7 @@ button, .btn {
 }
 
 .fav-group-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elev-hover);
   border-color: var(--fg-subtle);
 }
 
@@ -815,18 +893,18 @@ button, .btn {
   font-size: 13px;
   font-weight: 500;
   transition: var(--transition);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
 }
 
 .window-toggle a:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elev-hover);
   color: var(--fg);
 }
 
 .window-toggle a.active {
   background: var(--accent-gradient);
   border-color: transparent;
-  color: #fff;
+  color: var(--fg-strong);
   box-shadow: var(--accent-glow);
 }
 
@@ -931,7 +1009,7 @@ button, .btn {
   padding: 6px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
   transition: var(--transition);
 }
 
@@ -973,7 +1051,7 @@ button, .btn {
   border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
+  color: var(--fg-strong);
   background: #1a1a1a;
   opacity: 0;
   transition: opacity 0.25s, transform 0.25s;
@@ -988,9 +1066,9 @@ button, .btn {
 
 /* ---- ADMIN DASHBOARD STYLES ---- */
 body.admin {
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(280, 85%, 65%, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, hsla(14, 100%, 57%, 0.05) 0px, transparent 50%);
+  background-image:
+    radial-gradient(at 0% 0%, var(--bg-radial-1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, var(--bg-radial-2) 0px, transparent 50%);
 }
 
 body.admin .topbar {
@@ -1073,7 +1151,7 @@ body.admin .topbar nav .logout:hover {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--fg-strong);
   margin-bottom: 6px;
   line-height: 1.4;
 }
@@ -1097,7 +1175,7 @@ body.admin .topbar nav .logout:hover {
   width: 100%;
   font-family: var(--font-mono);
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
@@ -1122,10 +1200,38 @@ body.admin .topbar nav .logout:hover {
 .settings-form .input-col .hint code {
   font-family: var(--font-mono);
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-elev-hover);
   padding: 1px 6px;
   border-radius: 3px;
   color: var(--fg-muted);
+}
+
+/* Tag Create Form (Admin / Tags page) */
+.tag-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.tag-create-form input[type="text"],
+.tag-create-form input[type="number"] {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: var(--transition);
+}
+.tag-create-form input[type="text"]:focus,
+.tag-create-form input[type="number"]:focus {
+  border-color: var(--border-focus);
+  background: rgba(0, 0, 0, 0.35);
+}
+.tag-create-form input::placeholder {
+  color: var(--fg-subtle);
 }
 
 /* Custom Admin Glass Tables */
@@ -1153,8 +1259,8 @@ body.admin .topbar nav .logout:hover {
 }
 
 .admin-table th {
-  background: rgba(0, 0, 0, 0.2);
-  color: #fff;
+  background: var(--bg-elev-hover);
+  color: var(--fg-strong);
   font-weight: 600;
   font-family: var(--font-display);
 }
@@ -1164,13 +1270,13 @@ body.admin .topbar nav .logout:hover {
 }
 
 .admin-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
 }
 
 .admin-table input[type="text"], 
 .admin-table input[type="number"], 
 .admin-table select {
-  background: rgba(0,0,0,0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--fg);
   padding: 6px 10px;
@@ -1210,17 +1316,17 @@ body.admin .topbar nav .logout:hover {
   color: var(--fg-muted);
   text-decoration: none;
   transition: var(--transition);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-elev);
 }
 
 .admin-toolbar a:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elev-hover);
   color: var(--fg);
 }
 
 .admin-toolbar a.active {
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--fg-strong);
   border-color: transparent;
   box-shadow: var(--accent-glow);
 }
@@ -1242,13 +1348,13 @@ body.admin .topbar nav .logout:hover {
   font-size: 22px;
   font-weight: 700;
   margin-bottom: 18px;
-  color: #fff;
+  color: var(--fg-strong);
 }
 
 .login-box input[type="password"] {
   width: 100%;
   padding: 10px 14px;
-  background: rgba(0,0,0,0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--fg);

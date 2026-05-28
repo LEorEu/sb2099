@@ -126,6 +126,32 @@ def test_low_quality_short_marked_filtered(tmp_db):
         assert row.is_filtered is True
 
 
+def test_decorated_noise_marked_filtered(tmp_db):
+    """noise 关键词被符号/重复装饰的变体也命中(晚安!!!、晚安~晚安~、晚安晚安晚安)。"""
+    from sb2099.db import SessionLocal
+    from sb2099.settings import settings_cache
+
+    settings_cache.invalidate()
+    for i, c in enumerate(["晚安晚安晚安", "晚安!!!", "晚安~晚安~"]):
+        _persist_sync(_evt(c, uid=f"u{i}", ts_ms=1779530000000 + i * 1000))
+    with SessionLocal() as s:
+        rows = s.execute(select(LiveHot)).scalars().all()
+        assert len(rows) == 3
+        assert all(r.is_filtered for r in rows)
+
+
+def test_decorated_noise_skips_good_meme(tmp_db):
+    """noise 关键词字符出现但还有其他字母(好梗) → 不命中。"""
+    from sb2099.db import SessionLocal
+    from sb2099.settings import settings_cache
+
+    settings_cache.invalidate()
+    _persist_sync(_evt("晚安宝贝"))
+    with SessionLocal() as s:
+        row = s.execute(select(LiveHot)).scalar_one()
+        assert row.is_filtered is False
+
+
 def test_low_quality_no_letter_marked_filtered(tmp_db):
     """纯数字 / 纯符号 emoji → is_filtered=1。"""
     from sb2099.db import SessionLocal

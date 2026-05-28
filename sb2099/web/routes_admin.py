@@ -113,6 +113,14 @@ _SETTING_META: list[dict[str, object]] = [
         "hint": "整数,建议 2 – 4",
     },
     {
+        "key": "live_hot_max_length",
+        "label": "直播热门最长字数",
+        "desc": "归一化后长于此字数直接进入「过滤」分组(防止超长复制刷屏)。设为 0 表示不限",
+        "kind": "int",
+        "default": 80,
+        "hint": "整数,建议 60 – 120;0 = 不限",
+    },
+    {
         "key": "live_noise_filters",
         "label": "直播降噪关键词",
         "desc": "弹幕全文完全等于其中任一条时,不进入热门榜",

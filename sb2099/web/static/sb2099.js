@@ -214,11 +214,27 @@
       .replace(/'/g, "&#039;");
   }
 
+  // ---- Theme Toggle ----
+  function toggleTheme() {
+    const root = document.documentElement;
+    const cur = root.getAttribute('data-theme') || 'dark';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('sb2099-theme', next); } catch (e) {}
+  }
+
   // ---- Global Actions Event Delegator ----
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
+
+    if (action === 'toggle-theme') {
+      e.preventDefault();
+      toggleTheme();
+      return;
+    }
+
     const id = parseInt(btn.dataset.id, 10);
     const source = btn.dataset.source;
     const content = btn.dataset.content || '';

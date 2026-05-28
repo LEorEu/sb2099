@@ -23,17 +23,45 @@ log = logging.getLogger(__name__)
 __all__ = ["persist_chat_event", "should_filter"]
 
 
-def _noise_match(content_norm: str) -> bool:
-    """整句精确匹配:content_norm 完全等于 normalize 后的任一关键词。"""
-    filters = settings_cache.get("live_noise_filters", []) or []
-    normed = {normalize(kw) for kw in filters if kw}
-    normed.discard("")
-    return content_norm in normed
+def _normalized_filters() -> list[str]:
+    raw = settings_cache.get("live_noise_filters", []) or []
+    out: list[str] = []
+    for kw in raw:
+        n = normalize(kw)
+        if n:
+            out.append(n)
+    return out
 
 
-def _is_low_quality(content_norm: str, min_length: int) -> bool:
-    """太短 / 不含任一字母(汉字、英文、日文等)的内容,标 is_filtered。"""
+def _noise_match(content_norm: str, filters: list[str]) -> bool:
+    """整句精确匹配:content_norm 完全等于任一(规范化后的)关键词。"""
+    return content_norm in filters
+
+
+def _is_decorated_noise(content_norm: str, filters: list[str]) -> bool:
+    """noise 关键词的"装饰/重复"变体:
+    - 至少包含一个 noise 关键词作为子串
+    - 把所有 noise 关键词字符剥掉后,剩余字符不再有任何字母(汉字/英文等)
+    例如:晚安晚安晚安、晚安!!!、晚安~晚安~ → 命中。晚安宝贝 → 不命中(剥后"宝贝"含字母)。
+    """
+    if not filters:
+        return False
+    if not any(kw in content_norm for kw in filters):
+        return False
+    stripped = content_norm
+    for kw in filters:
+        stripped = stripped.replace(kw, "")
+    for ch in stripped:
+        if unicodedata.category(ch).startswith("L"):
+            return False
+    return True
+
+
+def _is_low_quality(content_norm: str, min_length: int, max_length: int) -> bool:
+    """太短 / 太长 / 不含任一字母(汉字、英文、日文等)的内容,标 is_filtered。"""
     if len(content_norm) < min_length:
+        return True
+    if max_length > 0 and len(content_norm) > max_length:
         return True
     for ch in content_norm:
         if unicodedata.category(ch).startswith("L"):
@@ -44,7 +72,15 @@ def _is_low_quality(content_norm: str, min_length: int) -> bool:
 def should_filter(content_norm: str) -> bool:
     """聚合所有"应当标 is_filtered=1"的判断。供 rescan 复用。"""
     min_length = int(settings_cache.get("live_hot_min_length", 2) or 2)
-    return _is_low_quality(content_norm, min_length) or _noise_match(content_norm)
+    max_length = int(settings_cache.get("live_hot_max_length", 80) or 0)
+    if _is_low_quality(content_norm, min_length, max_length):
+        return True
+    filters = _normalized_filters()
+    if _noise_match(content_norm, filters):
+        return True
+    if _is_decorated_noise(content_norm, filters):
+        return True
+    return False
 
 
 def _persist_sync(evt: dict) -> None:

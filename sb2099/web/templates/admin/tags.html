@@ -9,12 +9,12 @@
 <!-- Glass Form: Create New Tag -->
 <section class="glass-card admin-form animate-fade" style="padding: 24px;">
   <h3 style="font-family: var(--font-display); font-size: 16px; font-weight:600; margin-bottom: 16px; color:#fff;">新增分类标签</h3>
-  <form method="post" action="/admin/tags" style="gap: 12px;">
-    <input type="text" name="value" placeholder="标签值 (例如 03, 04, a1, max 8字)" maxlength="8" pattern="[0-9A-Za-z]{1,8}" required style="flex: 1; min-width: 140px;">
-    <input type="text" name="label" placeholder="标签显示名称 (例如 主播, 互动)" required style="flex: 1; min-width: 140px;">
-    <input type="text" name="icon_url" placeholder="图标图片 URL (可空)" style="flex: 1.5; min-width: 200px;">
-    <input type="number" name="sort" placeholder="排序权重" value="0" style="width: 100px;">
-    <button type="submit" class="btn btn-primary" style="padding: 8px 24px;">+ 添加标签</button>
+  <form method="post" action="/admin/tags" class="tag-create-form">
+    <input type="text" name="value" placeholder="标签值 (例如 03, 04, a1, max 8字)" maxlength="8" pattern="[0-9A-Za-z]{1,8}" required style="flex: 0 0 180px;">
+    <input type="text" name="label" placeholder="标签显示名称" required style="flex: 1 1 160px;">
+    <input type="text" name="icon_url" placeholder="图标图片 URL (可空)" style="flex: 1 1 220px;">
+    <input type="number" name="sort" placeholder="排序" value="0" style="flex: 0 0 90px;">
+    <button type="submit" class="btn btn-primary" style="flex: 0 0 auto; padding: 8px 22px;">+ 添加标签</button>
   </form>
 </section>
 

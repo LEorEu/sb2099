@@ -5,19 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}sb2099 — 斗鱼2099房间烂梗收集与一键发送站{% endblock %}</title>
   <link rel="stylesheet" href="/static/sb2099.css">
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sb2099-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <script src="/static/sb2099.js" defer></script>
-  
+
   <!-- Premium Glass Top Bar -->
   <header class="topbar">
-    <a class="brand" href="/">sb2099</a>
-    <nav>
+    <div class="topbar-left">
+      <a class="brand" href="/">sb2099</a>
+    </div>
+    <nav class="topbar-center">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">首页</a>
       <a href="/barrage" class="{% if request.url.path.startswith('/barrage') %}active{% endif %}">全部烂梗</a>
       <a href="/live" class="{% if request.url.path.startswith('/live') %}active{% endif %}">热门弹幕</a>
-      <a href="/userscript" class="us">油猴脚本</a>
     </nav>
+    <div class="topbar-right">
+      {% include "_topbar_tools.html" %}
+    </div>
   </header>
 
   <!-- Main Content Body Container -->

@@ -30,13 +30,13 @@
       <table class="admin-table">
         <thead>
           <tr>
-            <th style="width: 8%;">ID</th>
-            <th style="width: 45%;">弹幕正文样本</th>
-            <th style="width: 8%;">24h 次数</th>
-            <th style="width: 8%;">累计次数</th>
-            <th style="width: 10%;">24h 唯一发送者</th>
-            <th style="width: 13%;">最近捕获时间</th>
-            <th style="width: 8%;">是否被屏蔽</th>
+            <th style="width: 7%;">ID</th>
+            <th style="width: 40%;">弹幕正文样本</th>
+            <th style="width: 8%; white-space: nowrap;">24h 次数</th>
+            <th style="width: 8%; white-space: nowrap;">累计次数</th>
+            <th style="width: 10%; white-space: nowrap;">24h 唯一</th>
+            <th style="width: 14%; white-space: nowrap;">最近捕获</th>
+            <th style="width: 13%; white-space: nowrap;">是否被屏蔽</th>
           </tr>
         </thead>
         <tbody>
@@ -48,11 +48,11 @@
             <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_total }}</td>
             <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.unique_sender_cnt_24h }} 人</td>
             <td style="vertical-align: middle; font-size:11px; color: var(--fg-subtle);">{{ it.last_seen | cst_long }}</td>
-            <td style="vertical-align: middle;">
+            <td style="vertical-align: middle; white-space: nowrap;">
               {% if it.is_filtered %}
-                <span class="script-badge" style="background: hsla(354, 75%, 55%, 0.15); color: var(--error); border-color: hsla(354, 75%, 55%, 0.3)">已过滤</span>
+                <span class="script-badge" style="background: hsla(354, 75%, 55%, 0.15); color: var(--error); border-color: hsla(354, 75%, 55%, 0.3); white-space: nowrap;">已过滤</span>
               {% else %}
-                <span class="script-badge" style="background: hsla(145, 65%, 45%, 0.15); color: var(--success); border-color: hsla(145, 65%, 45%, 0.3)">公开</span>
+                <span class="script-badge" style="background: hsla(145, 65%, 45%, 0.15); color: var(--success); border-color: hsla(145, 65%, 45%, 0.3); white-space: nowrap;">公开</span>
               {% endif %}
             </td>
           </tr>
