@@ -37,3 +37,10 @@ def test_current_live_window_before_4am_rolls_back():
     live_date, start_utc = current_live_window(now)
     assert live_date == date(2026, 5, 28)
     assert start_utc == datetime(2026, 5, 27, 20, 0)
+
+
+def test_current_live_window_exactly_4am_is_same_day():
+    now = _utc_naive(2026, 5, 29, 4, 0)
+    live_date, start_utc = current_live_window(now)
+    assert live_date == date(2026, 5, 29)
+    assert start_utc == datetime(2026, 5, 28, 20, 0)

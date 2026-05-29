@@ -26,5 +26,5 @@ def current_live_window(now_utc_naive: datetime) -> tuple[date, datetime]:
 
 def live_date_of(ts_utc_naive: datetime) -> date:
     """某条弹幕（UTC naive）归属的数据日。"""
-    ts_cst = ts_utc_naive.replace(tzinfo=timezone.utc).astimezone(CST)
-    return (ts_cst - timedelta(hours=_LIVE_DAY_START_HOUR)).date()
+    live_date, _ = current_live_window(ts_utc_naive)
+    return live_date
