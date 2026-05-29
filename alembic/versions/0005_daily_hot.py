@@ -72,6 +72,20 @@ def downgrade() -> None:
         sa.Column("unique_sender_cnt_7d", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("is_filtered", sa.Boolean(), nullable=False, server_default="0"),
     )
+    op.create_index("ix_livehot_send24h", "live_hot", ["send_cnt_24h"])
+    op.create_index("ix_livehot_send7d", "live_hot", ["send_cnt_7d"])
+    op.create_index("ix_livehot_copy", "live_hot", ["page_copy_cnt"])
+    op.create_index("ix_livehot_lastseen", "live_hot", ["last_seen"])
     op.drop_table("daily_hot")
+
     bind = op.get_bind()
     bind.execute(sa.text("DELETE FROM setting WHERE key='daily_hot_retention_days'"))
+    # best-effort：恢复到本迁移升级前的已知默认值（用户可能手动调过，无法精确还原）
+    bind.execute(
+        sa.text("UPDATE setting SET value=:v WHERE key='raw_retention_days'"),
+        {"v": json.dumps(30)},
+    )
+    bind.execute(
+        sa.text("UPDATE setting SET value=:v WHERE key='live_hot_min_unique_senders_24h'"),
+        {"v": json.dumps(3)},
+    )
