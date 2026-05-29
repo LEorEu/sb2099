@@ -1,0 +1,510 @@
+# sb2099 — 设计文档
+
+> 起草时间：2026-05-22
+> 更新：2026-05-23 落地决策（详见 `refs/sb6657-api-snapshot.md`）
+> 参考：`refs/sb6657-api-snapshot.md`（sb6657 后端接口实测，2026-05-23 Playwright 抓取）、`/D:/agent工作台/sb6657-barrage-snapshot.md` + `sb6657-home-snapshot.md`（页面结构快照）
+> 关联项目：`D:\agent工作台\douyu_live` (Hyacinth Sentry · 风信子哨兵) — **仅作协议源参考**，sb2099 运行时通过 WebSocket 消费上游 VPS 8080 服务，不在本地导入其代码
+> 状态：2026-05-23 已确认抓取层、归一化规则、投稿规则、tag 字典、§14 字段兼容
+
+---
+
+## 1. 项目背景与目标
+
+**sb2099** 是一个面向斗鱼 2099 房间观众的烂梗收集与一键发送站。功能形态参考 `sb6657.cn`（接口快照见 `refs/sb6657-api-snapshot.md`），但刻意做得**更纯粹**。
+
+> **房间号澄清**：URL 短号 `2099` 对应斗鱼真实房间 `DOUYU_ROOM_ID=12740109`，主播"一团肉松子"。上游 douyu_live 服务（VPS 8080）已绑定该房间。
+
+- **不**做赛事押注 / 赛事数据可视化
+- **不**做用户系统（注册/登录/个人中心）
+- **不**接广告位（尤其不接博彩竞猜导流）
+- **不**做 AI 造梗、时光相册、贴吧等周边模块
+- **核心目标**：让观众更舒服地投稿、收藏、复制烂梗，并在 2099 房间直播间通过油猴脚本单条发送
+
+**合规前提**：这是与 `douyu_live` 项目 README 所声明使用边界的一致状态。
+
+---
+
+## 2. 功能需求 — 三页主站与油猴分层
+
+```
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   首页           │  │   全部烂梗      │  │   热门弹幕      │
+│   /              │  │   /barrage      │  │   /live         │
+├─────────────────┤  ├─────────────────┤  ├─────────────────┤
+│ 介绍 / 油猴入口 │  │ 正式投稿库      │  │ 直播现场发现页  │
+│ 投稿 / 随机一条 │  │ 搜索 / tag / 排序│ │ 严格榜单        │
+│ 最新投稿预览    │  │ 收藏 / 不合适   │  │ 今日 Top10      │
+│                 │  │ 投稿弹窗        │  │ 本周 Top50      │
+└────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+         │                    │                     │
+         │                    │                     │ 未入库条目
+         │                    │                     │ 补 tag 提升
+         │                    │◄────────────────────┘
+         │                    │
+         └────── 首页投稿 ───►│
+
+油猴只消费投稿库：关键词搜索 + tag 筛选 + 收藏分组 + 单条复制/发送。
+```
+
+### 2.1 条目动作
+
+| 场景 | 动作 | 语义 |
+|---|---|---|
+| 主站投稿库 | 复制 | 使用该条投稿，累加复制数 |
+| 主站投稿库 | 收藏 | 保存到主站本地收藏分组，供导入油猴 |
+| 主站投稿库 | 不合适 | 给管理员公共负反馈信号，不直接下架 |
+| 热门弹幕榜单 | 复制 | 仅复制文本，不等于进入投稿库 |
+| 热门弹幕榜单 | `+` 入库 | 未入库条目补 tag 后提交到投稿库 |
+| 油猴投稿库 | 复制 / 发送 | 在直播间单条使用投稿库内容 |
+| 油猴投稿库 | 收藏 / 屏蔽 | 本地个性化梗单与隐藏列表，不上报 |
+
+### 2.2 复制流程
+
+- 公开页或油猴脚本上点 "复制"：
+  - 投稿库条目 → `cnt += 1`
+  - 直播热门条目 → `page_copy_cnt += 1`（与 `send_cnt_*` 分开）
+- 油猴不做自动连续发送；用户在搜索结果或收藏分组中逐条复制或单条发送
+
+### 2.3 投稿
+
+- `content` 长度上下限由后台设置；最大值初期按 255
+- 必须 ≥1 个启用中的 tag
+- 公开投稿不展示投稿者信息
+- 投稿提交时按下表决策（`submission_review_rules` 见 §6 / §10）：
+
+| 情形 | 行为 |
+|---|---|
+| 同 `content_norm` 已在 `barrage` 表（无论 active/pending） | 409，返回已有条目 |
+| 命中任一 `block` 规则 | 422 拒收，**优先于 pending 判定** |
+| 命中任一 `pending` 规则 | 入库 `status='pending'`，进后台审核队列 |
+| 都不命中 | 入库 `status='active'` 直接公开 |
+
+`submission_review_rules` 是 `[{type:keyword|regex, pattern, action:block|pending}, ...]`，作用于投稿原文（非归一化字符串），存 `setting` 表，运行时可改。
+
+### 2.4 跨板块提升 (`live_hot` → `barrage`)
+
+- 访客在未入库热门条目上点 `+` → 打开与普通投稿同构的投稿弹窗
+- 弹窗自动填入热门正文，正文只读，访客只补 tag 后提交
+- 提交后：拷贝文本到 `barrage` 表新增一条，`source='promoted'`
+- 原 `live_hot` 行**保留不变**（继续累计指标）
+- 若 `content_norm` 已存在投稿库 → 不显示入库按钮；重复提交兜底同 §2.3
+
+### 2.5 后台管理
+
+| 页面 | 功能 |
+|---|---|
+| `/admin/login` | 输入 `SB2099_ADMIN_TOKEN`，过则发 30 天 HttpOnly Cookie |
+| `/admin/settings` | 阈值、限流、投稿长度、直播降噪规则、投稿待审规则、保留天数；写回 `setting` 表 + 内存缓存失效 |
+| `/admin/tags` | tag 字典 CRUD：value/label/icon_url/sort/enabled |
+| `/admin/barrage/pending` | 审核风险投稿；可通过、拒绝，并在审核时修正 tag |
+| `/admin/barrage/reports` | 查看被标记"不合适"的投稿，按反馈次数和最近反馈排序 |
+| `/admin/live_hot?filtered=true` | 看被直播降噪规则命中的弹幕；可批量维护规则；**修改后触发一次重扫，重算所有 `live_hot.is_filtered` 标记** |
+| `/admin/live_hot/<id>` | 看某条热门的所有原始弹幕（uid 列表，识别刷子）|
+| `/admin/barrage/_trash` | 软删的烂梗，可恢复或永久删 |
+| `/admin/stats` | 24h 折线（投稿/复制/抓取/反馈）+ TOP IP 列表 |
+
+### 2.6 本地收藏
+
+- 主站"全部烂梗"和油猴都支持投稿库条目的本地收藏分组
+- 可创建、重命名、删除分组，并支持导入导出
+- 第一版不做自动同步，不引入用户系统
+- 收藏数据初期只保存投稿库条目编号和分组关系，不保存正文快照
+- 主站第一版不做个人屏蔽；油猴本地屏蔽仅影响直播间工具视图，并提供恢复入口
+
+---
+
+## 3. 非功能需求
+
+| 维度 | 要求 |
+|---|---|
+| 性能 | 弹幕 50 条/秒峰值；asyncio + SQLite WAL 足够；DB 写走 `to_thread` 不阻塞事件循环 |
+| 隐私 | IP 不留明文，全程 `sha256(ip + secret_salt)[:16]`；原始弹幕 30 天后归档/删除 |
+| 可观测 | 标准日志到 stdout；errors → sentry-sdk（可选）；后台 `/admin/stats` 是主要监控 |
+| 反滥用 | 限流（slowapi）+ 投稿期 `content_norm` 去重；**初期不上验证码**，被刷再启 |
+| 部署 | 单 VPS + systemd + Caddy 自动 HTTPS；可选 Cloudflare 代理 |
+
+---
+
+## 4. 技术栈
+
+| 层 | 选型 | 理由 |
+|---|---|---|
+| 后端 | Python 3.11+, FastAPI, asyncio | 与 `douyu_live` 同源，协议层可复用 |
+| 模板 | Jinja2 SSR | 无 Node 工具链，纯粹 |
+| 交互 | HTMX + 极少 vanilla JS | 列表换页 / 复制 / 投稿反馈走 `hx-post` 局部替换 |
+| 数据库 | SQLite (WAL) + FTS5 全文索引 | 单文件、零运维、扛得住直播间吞吐 |
+| 迁移 | Alembic | 标准 |
+| 限流 | slowapi | FastAPI 生态成熟 |
+| 测试 | pytest + FastAPI TestClient + Playwright | 单元 / 集成 / e2e 三层 |
+| 部署 | systemd + Caddy（自动 HTTPS）+ 可选 Cloudflare | 单进程，systemd 守护 |
+| 抓取协议 | 订阅 douyu_live VPS 8080 的 `/ws/live`，过滤 `kind=="chat"` 拿到原始弹幕 | 不在本地重写斗鱼协议；上游已 7×24 运行 |
+
+显式**不**选型：Vue/React/Node 工具链、Postgres、Redis、消息队列。
+
+---
+
+## 5. 仓库结构
+
+仓库：`sb2099/`（独立 git 仓库）。
+
+```
+sb2099/
+├── pyproject.toml
+├── README.md                      # 含合规声明：主播本人 / 无广告 / 无 PII
+├── alembic/                       # DB 迁移
+│   └── versions/
+├── sb2099/
+│   ├── __init__.py
+│   ├── config.py                  # 环境变量、阈值默认值 (DEFAULTS dict)
+│   ├── db.py                      # SQLAlchemy + SQLite 连接 (WAL)
+│   ├── models.py                  # 核心表 ORM (见 §6)
+│   ├── normalize.py               # 纯函数：归一化字符串相等的核心
+│   ├── ratelimit.py               # slowapi 配置 + IP 哈希
+│   ├── search.py                  # FTS5 索引同步与查询
+│   ├── ingest/
+│   │   ├── client.py              # websockets 客户端，订阅 ws://139.196.96.110:8080/ws/live
+│   │   ├── worker.py              # 7×24 asyncio task; 断线 5s 重连
+│   │   └── aggregator.py          # filter kind=="chat" → raw_danmaku → upsert live_hot → 计数
+│   ├── web/
+│   │   ├── app.py                 # FastAPI 实例 + lifespan 启动 worker/cron
+│   │   ├── routes_public.py       # /, /barrage, /live
+│   │   ├── routes_api.py          # /api/* JSON
+│   │   ├── routes_admin.py        # /admin/* Bearer Cookie 鉴权
+│   │   ├── templates/             # Jinja2
+│   │   └── static/                # CSS, sb2099.user.js 源
+│   └── userscript/
+│       └── sb2099.user.js         # 单文件 UserScript, < 500 行
+└── tests/
+    ├── test_normalize.py
+    ├── test_aggregator.py
+    ├── test_ratelimit.py
+    ├── test_search.py
+    ├── test_routes_public.py
+    ├── test_routes_api.py
+    ├── test_routes_admin.py
+    └── e2e/
+        └── test_copy_flow.py      # Playwright
+```
+
+**模块边界硬约束**：
+
+- `normalize.py` 纯函数，无外部依赖
+- `ingest/` 与 `web/` 只通过 DB 通讯，**互不引用代码**
+- 单 `.py` 文件 > 300 行视为信号，考虑拆分
+- 抓取层不在本地导入 `hyacinth_sentry` 代码；通过 WebSocket 客户端订阅 douyu_live VPS 服务（`ws://139.196.96.110:8080/ws/live`），filter `kind=="chat"` 得到与 §6 raw_danmaku 同构的事件流
+
+---
+
+## 6. 数据模型
+
+核心表如下。无 `user` 表；主站收藏与油猴屏蔽都走本地存储，不落服务端。
+
+### `raw_danmaku` — 原始弹幕
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INTEGER PK | |
+| ts | DATETIME | 弹幕到达时间 |
+| uid | TEXT | 斗鱼用户 ID |
+| nickname | TEXT | 昵称（仅用于后台展示，识别刷子） |
+| content_raw | TEXT | 原文 |
+| content_norm | TEXT | 归一化后字符串（`normalize.normalize(content_raw)`） |
+
+索引：`(content_norm, ts)`、`(ts)`。
+保留：30 天，由 `archive_cron` 删除。
+
+### `live_hot` — 直播热门
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INTEGER PK | |
+| content_norm | TEXT UNIQUE | 归一化文本 |
+| content_sample | TEXT | 首次出现时的原文（展示用） |
+| first_seen | DATETIME | |
+| last_seen | DATETIME | |
+| page_copy_cnt | INTEGER DEFAULT 0 | 站内复制次数 |
+| send_cnt_24h | INTEGER DEFAULT 0 | 近 24h 被发送次数（增量 + cron 校正）|
+| send_cnt_7d | INTEGER DEFAULT 0 | 近 7d |
+| send_cnt_total | INTEGER DEFAULT 0 | 累计总次数 |
+| unique_sender_cnt_24h | INTEGER DEFAULT 0 | 近 24h 不同发送者数 |
+| unique_sender_cnt_7d | INTEGER DEFAULT 0 | 近 7d 不同发送者数 |
+| is_filtered | BOOLEAN DEFAULT 0 | 命中直播降噪规则时标 1，公开不显示 |
+
+索引：`(send_cnt_24h DESC)`、`(send_cnt_7d DESC)`、`(page_copy_cnt DESC)`、`(last_seen DESC)`。
+
+### `barrage` — 投稿库
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INTEGER PK | |
+| content | TEXT | 原文，长度上下限由设置控制 |
+| content_norm | TEXT UNIQUE | 用于去重 |
+| tags | TEXT | CSV: `"00,07,22"` |
+| source | TEXT | `'user'` 或 `'promoted'` |
+| submitter_ip_hash | TEXT | |
+| submit_time | DATETIME | |
+| cnt | INTEGER DEFAULT 0 | 复制次数 |
+| report_cnt | INTEGER DEFAULT 0 | "不合适"反馈数 |
+| status | TEXT DEFAULT 'active' | `'active'` / `'pending'` / `'deleted'` |
+
+索引：`(submit_time DESC)`、`(cnt DESC)`、`(status, submit_time DESC)`。
+
+### `barrage_fts` — FTS5 虚拟表
+
+```sql
+CREATE VIRTUAL TABLE barrage_fts USING fts5(
+  content,
+  content_norm UNINDEXED,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+```
+
+通过 SQLite trigger 在 `barrage` insert/update/delete 时同步。热门弹幕公开页是严格榜单，不提供油猴搜索池语义。
+
+### `tag` — 标签字典
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| value | TEXT PK | 两位字符串（与 sb6657 对齐：`00`,`01`,...） |
+| label | TEXT | 显示名 |
+| icon_url | TEXT NULL | 头像图 |
+| sort | INTEGER DEFAULT 0 | 排序 |
+| enabled | BOOLEAN DEFAULT 1 | 禁用后不再出现在投稿页 |
+
+**初始数据**（alembic 0001 灌入；后续靠 `/admin/tags` CRUD 扩展）：
+
+| value | label | sort |
+|---|---|---|
+| `00` | 主播 | 0 |
+| `01` | 选手 | 1 |
+| `02` | 互动 | 2 |
+| `99` | 其他 | 99 |
+
+> sb6657 的 27 个 tag 强耦合其房间内容，与 12740109 房不匹配。第一版宁缺毋滥，让真实投稿出现规律后再扩。投稿强制 ≥1 tag，"其他"兜底。
+
+### `barrage_report` — "不合适"反馈
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INTEGER PK | |
+| barrage_id | INTEGER | 投稿库条目 |
+| ip_hash | TEXT | |
+| ts | DATETIME | |
+
+约束：`UNIQUE(barrage_id, ip_hash)`。
+索引：`(barrage_id, ip_hash)`。
+
+### `setting` — 运行时配置
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| key | TEXT PK | |
+| value | JSON | |
+| updated_at | DATETIME | |
+
+启动时若 key 缺失则用 `DEFAULTS` 填入：
+
+```python
+DEFAULTS = {
+  "live_hot_min_unique_senders_24h": 3,
+  "live_noise_filters": ["晚安", "88888", "爆了", "+1"],
+  "submission_review_rules": [],
+  "barrage_min_length": 4,
+  "barrage_max_length": 255,
+  "ratelimit_submit_per_hour_per_ip": 5,
+  "ratelimit_report_per_hour_per_ip": 60,
+  "ratelimit_copy_per_hour_per_ip": 200,
+  "ratelimit_promote_per_hour_per_ip": 5,
+  "raw_retention_days": 30,
+}
+```
+
+---
+
+## 7. 服务拓扑
+
+单 `uvicorn` 进程，asyncio 内三类协程：
+
+```
+┌────────────────────────────────────────────────────────┐
+│           uvicorn 单进程 (FastAPI app)                 │
+│                                                         │
+│  lifespan startup:                                     │
+│    ├─ ingest_task        WS → ws://139.196.96.110:8080/ws/live (上游 douyu_live VPS, 房间 12740109) │
+│    ├─ recount_cron       每分钟校正 send_cnt_24h/7d   │
+│    └─ archive_cron       每日 04:00 清理 raw_danmaku  │
+│                                                         │
+│  HTTP:                                                 │
+│    ├─ public pages  (Jinja2 SSR + HTMX)                │
+│    ├─ /api/*        JSON                               │
+│    └─ /admin/*      Cookie-Token 鉴权                  │
+└────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │ sb2099.db   │   SQLite WAL
+                   └─────────────┘
+```
+
+**关键决策**：
+
+- 单进程，asyncio 跑 ingest 与 web；DB 写操作走 `asyncio.to_thread` 避免阻塞循环
+- `recount_cron` 每分钟跑（不是每小时；用户上次问到此点，按"准确度优先"取每分钟）
+- 弹幕入库走"增量 ++ + cron 校正"，不每条都重算 24h
+
+---
+
+## 8. HTTP 路由
+
+### 公开页面 (Jinja2 SSR)
+
+| 路径 | 模板 | 说明 |
+|---|---|---|
+| `GET /` | `home.html` | 介绍 + 油猴入口 + 首页投稿框 + 随机一条 + 最新投稿少量预览 |
+| `GET /barrage?tag=&sort=&q=&page=` | `list.html` | 投稿库列表；`q` 走 FTS5；多 tag 按任一匹配 |
+| `GET /live?window=day\|week` | `live.html` | 严格热门榜单；初期为今日 Top10 / 本周 Top50 |
+| `GET /userscript` | — | 直接吐 `sb2099.user.js`（`Content-Type: application/javascript`）|
+
+### `/api/*` JSON (HTMX & 油猴共用)
+
+| 方法 路径 | 说明 |
+|---|---|
+| `GET  /api/random` | 首页"换一换" + 油猴随机；只取投稿库 |
+| `GET  /api/barrage?tag=&sort=&q=&page=&size=` | 投稿库分页 |
+| `GET  /api/live?window=day\|week` | 直播热门严格榜单 |
+| `POST /api/barrage`（限流） | 投稿，body `{content, tags[]}` |
+| `POST /api/copy`（限流） | `{source, id}` → cnt / page_copy_cnt += 1 |
+| `POST /api/barrage/report`（限流） | 投稿库条目"不合适"反馈，body `{id}` |
+| `POST /api/promote`（限流） | live_hot → barrage，body `{live_hot_id, tags[]}` |
+| `GET  /api/tags` | 启用的 tag 字典 |
+| `GET  /api/userscript/version` | 油猴脚本版本号（脚本启动时自查更新） |
+
+### `/admin/*` (Cookie 鉴权)
+
+见 §2.5。
+
+### 油猴脚本最小功能
+
+- `@match` 匹配 2099 房间页 (`https://www.douyu.com/2099`, `https://www.douyu.com/topic/...`)
+- 注入抽屉面板，只消费正式投稿库
+- 顶部搜索框（走 FTS5 `q=`）+ tag 速选
+- 支持本地收藏分组、导入导出、条目屏蔽与恢复
+- 点条目复制；显式发送动作把单条内容送入 2099 房发送框
+- 不展示直播热门，不做自动连续发送
+- 启动时 `GET /api/userscript/version` 检查新版
+
+---
+
+## 9. 反滥用
+
+| 操作 | 限流 (默认) | 验证码 |
+|---|---|---|
+| `POST /api/copy` | 200/h/IP | ❌ |
+| `POST /api/barrage/report` | 60/h/IP | ❌ |
+| `POST /api/barrage` | 5/h/IP | ❌（用户决定不上）|
+| `POST /api/promote` | 5/h/IP | ❌ |
+
+**初期不上验证码**，被刷再启。上线初期由你人肉看 `/admin/stats` 的 TOP IP 列表，手工封 IP（在 `setting.banned_ips` 数组里加）。
+
+IP 识别：信任 `X-Forwarded-For` 第一个；落库前 `sha256(ip + SB2099_IP_SALT)[:16]`。
+
+---
+
+## 10. 测试策略
+
+### 单元 (pytest)
+
+| 模块 | 重点 case |
+|---|---|
+| `normalize.py` | 全/半角统一、零宽字符清理、空白合并、emoji 和主要标点保留、保守去重边界 |
+| `ingest/aggregator.py` | 直播降噪命中跳过；同 `content_norm` 聚合；不同发送者阈值；计数；重启后 `send_cnt_total` 不归零 |
+| `ratelimit.py` | 第 N+1 次 → 429 |
+| `search.py` | FTS5 中文分词、特殊符号、空查询 |
+
+### 集成 (FastAPI TestClient)
+
+- 限流：第 6 次 `POST /api/barrage` 返回 429
+- "不合适"反馈：同 IP 同条只计一次
+- 跨板块提升：`POST /api/promote` 后投稿库出现新条，原热门记录仍在
+- 软删后该条不在公开列表，`/admin/.../trash` 能看到
+- 投稿命中待审规则 → `pending`；命中已有 content_norm → 409 并返回已有条目
+
+### e2e (Playwright)
+
+最小一个用例：打开全部烂梗 → 筛某 tag → 点复制 → 看到 toast → 后端 `cnt+=1`。
+
+---
+
+## 11. 上线 Checklist
+
+- [ ] `SB2099_ADMIN_TOKEN` 已设置（无默认值，未设置 → 启动报错退出）
+- [ ] `SB2099_IP_SALT` 已设置
+- [ ] `DOUYU_ROOM_ID=2099` 已设置
+- [ ] alembic upgrade head 已执行
+- [ ] 初始 tag 字典已通过 `/admin/tags` 灌入
+- [ ] systemd unit 已部署
+- [ ] Caddy 反代 + HTTPS OK
+- [ ] 30 天监控：抓取速率、live_hot 行增长、TOP IP
+
+---
+
+## 12. 候选扩展模块（默认不做，需要时单独立 spec）
+
+| 候选 | 决定 |
+|---|---|
+| 词云 | 与"直播热门列表"重合，**砍** |
+| 年度 TOP20 | 一年后再说 |
+| 通知中心 | 与"无用户系统"冲突，**砍** |
+| 投稿评论区 | 易成水贴，**砍** |
+| RSS 输出 | 极轻量，**可保留候选** |
+| 弹幕图床 | 审核负担，**砍** |
+| AI 造梗 | sb6657 特色，与"纯粹"冲突，**砍** |
+| 直播在线状态徽标 | Hyacinth Sentry 已有，**可保留候选** |
+| OpenAPI 文档 | FastAPI 默认 `/docs`，**免费保留** |
+| **全文搜索** | **初期必做**（已纳入 §6 `barrage_fts` 与 §8 `q=`）|
+
+---
+
+## 13. 合规与隐私
+
+- README 顶部声明：作者为 2099 房主播或已获明确授权
+- 首页或页脚显式说明：仅记 IP 哈希，30 天后删除原始弹幕，不接广告、不转售数据、不上报第三方
+- 与 `douyu_live` README 的使用边界一致（主播本人 / 自有直播间）
+- 显式不接斗鱼以外的弹幕源
+
+---
+
+## 14. 与 sb6657 的接口字段兼容
+
+> 2026-05-23 实测：sb6657 API host 为 `https://hguofichp.cn:10086/machine/`（独立后端，不在 sb6657.cn 主域）。详见 `refs/sb6657-api-snapshot.md`。
+
+### 端点映射
+
+| sb6657 端点 | sb2099 §8 对应 | sb6657 响应包络 |
+|---|---|---|
+| `GET /machine/dictList` | `GET /api/tags` | `{code, msg, data:[{dictValue, dictLabel, iconUrl, dictType:"machine_tags"}]}` |
+| `GET /machine/Page?pageNum=N&pageSize=K` | `GET /api/barrage` | `{data:{list:[...], total, lastPage}}` |
+| `GET /machine/hotBarrageOf24H` | `GET /api/live?window=day` | `{data:[{barrageId, barrage, cnt, tags, hotDateTime}]}` |
+| `GET /machine/getRandOne` | `GET /api/random` | `{data:{id, barrage, cnt, tags, submitTime}}` |
+
+### 字段对照（barrage 表）
+
+| sb2099.barrage | sb6657 字段 | 类型差异 |
+|---|---|---|
+| id (INT) | id 或 barrageId (str) | sb6657 hotBarrage 用 barrageId 字符串 |
+| content | barrage | sb6657 字段名 `barrage` |
+| tags | tags | 均 CSV |
+| cnt (INT) | cnt (str) | sb6657 用字符串数字 |
+| submit_time | submitTime / hotDateTime | sb6657 热门用 hotDateTime |
+| status | — | sb6657 无 |
+| report_cnt | — | sb6657 无"不合适" |
+
+### 字段对照（tag 表）
+
+| sb2099.tag | sb6657 dictList |
+|---|---|
+| value | dictValue |
+| label | dictLabel |
+| icon_url | iconUrl |
+
+sb2099 不复制 sb6657 字段名（`content` 比 `barrage` 清晰）。互导时类型转换与字段重命名留待后期独立迁移脚本。
