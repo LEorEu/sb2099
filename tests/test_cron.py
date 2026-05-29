@@ -1,13 +1,14 @@
-"""cron.recount_once：基于 raw_danmaku 重算 live_hot 计数。"""
+"""cron: recount 构建 daily_hot + archive 清理。"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from sb2099.cron import _archive_sync, _recount_sync
 from sb2099.ingest.aggregator import _persist_sync
-from sb2099.models import LiveHot, RawDanmaku
+from sb2099.models import DailyHot, RawDanmaku
+from sb2099.settings import settings_cache
 
 
 def _evt(content: str, uid: str, ts: datetime) -> dict:
@@ -22,23 +23,59 @@ def _evt(content: str, uid: str, ts: datetime) -> dict:
     }
 
 
-def test_recount_send_cnt_24h(tmp_db):
+def _set_threshold(value: int) -> None:
+    import json
+    from datetime import datetime as _dt
     from sb2099.db import SessionLocal
+    from sb2099.models import Setting
+    with SessionLocal() as s:
+        s.execute(
+            update(Setting)
+            .where(Setting.key == "live_hot_min_unique_senders_24h")
+            .values(value=json.dumps(value), updated_at=_dt.utcnow())
+        )
+        s.commit()
+    settings_cache.invalidate()
 
+
+def test_recount_promotes_when_threshold_met(tmp_db):
+    from sb2099.db import SessionLocal
+    _set_threshold(2)
     now = datetime.utcnow().replace(microsecond=0)
-    # 3 次"加一"——24h 内 2 次（同 uid 不算 unique 增量），1 次 26h 前
-    _persist_sync(_evt("加一", "u1", now - timedelta(hours=1)))
-    _persist_sync(_evt("加一", "u2", now - timedelta(hours=2)))
-    _persist_sync(_evt("加一", "u3", now - timedelta(hours=26)))
+    _persist_sync(_evt("加一", "u1", now - timedelta(minutes=1)))
+    _persist_sync(_evt("加一", "u2", now - timedelta(minutes=2)))
+    _persist_sync(_evt("加一", "u3", now - timedelta(minutes=3)))
 
     _recount_sync()
     with SessionLocal() as s:
-        row = s.execute(select(LiveHot)).scalar_one()
-        assert row.send_cnt_total == 3
-        assert row.send_cnt_24h == 2
-        assert row.send_cnt_7d == 3
-        assert row.unique_sender_cnt_24h == 2
-        assert row.unique_sender_cnt_7d == 3
+        row = s.execute(select(DailyHot)).scalar_one()
+        assert row.content_norm == "加一"
+        assert row.send_cnt == 3
+        assert row.unique_sender_cnt == 3
+
+
+def test_recount_skips_below_threshold(tmp_db):
+    from sb2099.db import SessionLocal
+    _set_threshold(3)
+    now = datetime.utcnow().replace(microsecond=0)
+    _persist_sync(_evt("没火", "u1", now - timedelta(minutes=1)))
+    _persist_sync(_evt("没火", "u2", now - timedelta(minutes=2)))
+
+    _recount_sync()
+    with SessionLocal() as s:
+        assert s.execute(select(DailyHot)).scalars().all() == []
+
+
+def test_recount_skips_noise(tmp_db):
+    from sb2099.db import SessionLocal
+    _set_threshold(2)
+    now = datetime.utcnow().replace(microsecond=0)
+    _persist_sync(_evt("+1", "u1", now - timedelta(minutes=1)))
+    _persist_sync(_evt("+1", "u2", now - timedelta(minutes=2)))
+
+    _recount_sync()
+    with SessionLocal() as s:
+        assert s.execute(select(DailyHot)).scalars().all() == []
 
 
 def test_archive_removes_old_rows(tmp_db):

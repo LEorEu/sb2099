@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, text
 
 from . import db as _db
+from .ingest.aggregator import should_filter
+from .live_day import current_live_window
 from .models import RawDanmaku
 from .settings import settings_cache
 
@@ -23,34 +25,59 @@ _ARCHIVE_HOUR_LOCAL = 4  # 每日 04:00 本地时间
 _ARCHIVE_CHECK_INTERVAL_S = 300.0  # 每 5 分钟检查一次是否到点
 
 
-_RECOUNT_SQL = text(
-    """
-    WITH agg AS (
-        SELECT
-            content_norm,
-            SUM(CASE WHEN ts >= :h24 THEN 1 ELSE 0 END) AS c24,
-            SUM(CASE WHEN ts >= :d7  THEN 1 ELSE 0 END) AS c7d,
-            COUNT(DISTINCT CASE WHEN ts >= :h24 THEN uid END) AS u24,
-            COUNT(DISTINCT CASE WHEN ts >= :d7  THEN uid END) AS u7d
-        FROM raw_danmaku
-        WHERE ts >= :d7
-        GROUP BY content_norm
-    )
-    UPDATE live_hot
-    SET send_cnt_24h           = COALESCE((SELECT c24 FROM agg WHERE agg.content_norm = live_hot.content_norm), 0),
-        send_cnt_7d            = COALESCE((SELECT c7d FROM agg WHERE agg.content_norm = live_hot.content_norm), 0),
-        unique_sender_cnt_24h  = COALESCE((SELECT u24 FROM agg WHERE agg.content_norm = live_hot.content_norm), 0),
-        unique_sender_cnt_7d   = COALESCE((SELECT u7d FROM agg WHERE agg.content_norm = live_hot.content_norm), 0)
-    """
-)
-
-
 def _recount_sync() -> None:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    h24 = now - timedelta(hours=24)
-    d7 = now - timedelta(days=7)
+    live_date, day_start = current_live_window(now)
+    live_date_str = live_date.isoformat()
+    threshold = int(settings_cache.get("live_hot_min_unique_senders_24h", 20) or 0)
+
     with _db.SessionLocal() as session:
-        session.execute(_RECOUNT_SQL, {"h24": h24, "d7": d7})
+        rows = session.execute(
+            text(
+                "SELECT content_norm, content_raw AS sample, "
+                "COUNT(*) AS send_cnt, COUNT(DISTINCT uid) AS uniq, "
+                "MIN(ts) AS first_seen, MAX(ts) AS last_seen "
+                "FROM raw_danmaku WHERE ts >= :start "
+                "GROUP BY content_norm HAVING COUNT(DISTINCT uid) >= :thr"
+            ),
+            {"start": day_start, "thr": threshold},
+        ).mappings().all()
+
+        qualifiers = [r for r in rows if not should_filter(r["content_norm"])]
+        keep = {r["content_norm"] for r in qualifiers}
+
+        existing = session.execute(
+            text("SELECT content_norm FROM daily_hot WHERE live_date = :d"),
+            {"d": live_date_str},
+        ).scalars().all()
+        for cn in existing:
+            if cn not in keep:
+                session.execute(
+                    text("DELETE FROM daily_hot WHERE live_date=:d AND content_norm=:cn"),
+                    {"d": live_date_str, "cn": cn},
+                )
+
+        for r in qualifiers:
+            session.execute(
+                text(
+                    "INSERT INTO daily_hot(live_date, content_norm, content_sample, "
+                    "send_cnt, unique_sender_cnt, first_seen, last_seen, page_copy_cnt, is_filtered) "
+                    "VALUES (:d, :cn, :s, :sc, :u, :fs, :ls, 0, 0) "
+                    "ON CONFLICT(live_date, content_norm) DO UPDATE SET "
+                    "content_sample=excluded.content_sample, send_cnt=excluded.send_cnt, "
+                    "unique_sender_cnt=excluded.unique_sender_cnt, "
+                    "first_seen=excluded.first_seen, last_seen=excluded.last_seen"
+                ),
+                {
+                    "d": live_date_str,
+                    "cn": r["content_norm"],
+                    "s": r["sample"],
+                    "sc": r["send_cnt"],
+                    "u": r["uniq"],
+                    "fs": r["first_seen"],
+                    "ls": r["last_seen"],
+                },
+            )
         session.commit()
 
 
