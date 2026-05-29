@@ -26,6 +26,9 @@ _HOST = "danmuproxy.douyu.com"
 _PORT = 8601
 _HEARTBEAT_INTERVAL = 40.0  # 秒；斗鱼侧约 45s 不收心跳就踢
 _RECONNECT_DELAY = 5.0
+# 斗鱼对繁忙房间按 gid 分片下发 chatmsg，单 -9999 只拿到一部分。
+# 2026-05-29 探针验证：6 个 gid 全订 + cid 去重统计 = 0 跨群重复，所以多群无副本。
+_GIDS_TO_JOIN: tuple[int, ...] = (-9999, 1, 2, 3, 4, 5)
 
 _HEADER = struct.Struct("<IIHBB")  # total_len, total_len_dup, msg_type, encrypt, reserved
 _CLIENT_TO_SERVER = 689
@@ -103,9 +106,13 @@ async def _one_session(room_id: int) -> AsyncIterator[dict]:
     异常向上传播给 stream_chat_events() 处理重连。
     """
     reader, writer = await asyncio.open_connection(_HOST, _PORT)
-    log.info("connected to %s:%d, joining room %d", _HOST, _PORT, room_id)
+    log.info(
+        "connected to %s:%d, joining room %d gids=%s",
+        _HOST, _PORT, room_id, list(_GIDS_TO_JOIN),
+    )
     writer.write(_encode(f"type@=loginreq/roomid@={room_id}/"))
-    writer.write(_encode(f"type@=joingroup/rid@={room_id}/gid@=-9999/"))
+    for gid in _GIDS_TO_JOIN:
+        writer.write(_encode(f"type@=joingroup/rid@={room_id}/gid@={gid}/"))
     await writer.drain()
 
     async def _heartbeat() -> None:

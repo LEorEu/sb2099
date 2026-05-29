@@ -80,6 +80,16 @@ def test_chatmsg_to_event_drops_missing():
     assert danmu_tcp._chatmsg_to_event({"type": "chatmsg", "txt": "hi"}, 100) is None
 
 
+def test_gids_to_join_covers_broadcast_and_shards():
+    """斗鱼按 gid 分片 chatmsg；只 join -9999 会漏一大半。
+    本测试防止回退到单一群的回归。
+    """
+    gids = danmu_tcp._GIDS_TO_JOIN
+    assert -9999 in gids, "broadcast group -9999 required"
+    shard_gids = [g for g in gids if g > 0]
+    assert len(shard_gids) >= 4, f"need multiple shard groups, got {shard_gids}"
+
+
 def test_to_int_handles_blank_and_invalid():
     assert danmu_tcp._to_int(None) is None
     assert danmu_tcp._to_int("") is None
