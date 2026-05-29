@@ -1,4 +1,4 @@
-"""周期任务：recount_cron（每分钟校正 live_hot 计数）+ archive_cron（每日清 raw_danmaku）。
+"""周期任务：recount_cron（每分钟从当前数据日 raw 重建 daily_hot）+ archive_cron（每日清过期 raw 与 daily_hot）。
 
 由 web.app lifespan 在 startup 时拉起。设计文档 §7。
 """
