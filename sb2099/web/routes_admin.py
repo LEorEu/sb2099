@@ -587,7 +587,8 @@ def live_hot_recompute(
                 "send_cnt_total, send_cnt_24h, send_cnt_7d, "
                 "unique_sender_cnt_24h, unique_sender_cnt_7d, is_filtered) "
                 "SELECT content_norm, "
-                "  (SELECT content_raw FROM raw_danmaku r2 WHERE r2.content_norm = r.content_norm ORDER BY ts DESC LIMIT 1), "
+                "  (SELECT content_raw FROM raw_danmaku r2 WHERE r2.content_norm = r.content_norm "
+                "    ORDER BY LENGTH(r2.content_raw) ASC, ts DESC LIMIT 1), "
                 "  MIN(ts), MAX(ts), COUNT(*), 0, 0, 0, 0, 0 "
                 "FROM raw_danmaku r WHERE content_norm <> '' GROUP BY content_norm"
             )
