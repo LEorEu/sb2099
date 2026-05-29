@@ -26,6 +26,27 @@ class RawDanmaku(Base):
     )
 
 
+class User(Base):
+    """2099 房间活跃用户名册：uid -> 最新昵称 + 头像。
+
+    avatar 存斗鱼 ic 路径(如 avatar_v3/202605/xxx)，渲染时用 sb2099.users.avatar_url()
+    按需拼 small/middle/big 尺寸。source: seed=从 hyacinth 种子导入 / live=自有弹幕回填。
+    """
+
+    __tablename__ = "user"
+    uid: Mapped[str] = mapped_column(Text, primary_key=True)
+    nickname: Mapped[str | None] = mapped_column(Text)
+    avatar: Mapped[str | None] = mapped_column(Text)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), default="seed", nullable=False)
+
+    __table_args__ = (
+        Index("ix_user_last_seen", "last_seen"),
+        Index("ix_user_nickname", "nickname"),
+    )
+
+
 class DailyHot(Base):
     __tablename__ = "daily_hot"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
