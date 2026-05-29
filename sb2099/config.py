@@ -39,7 +39,7 @@ def get_settings() -> Settings:
 
 # setting 表首次启动种子值；后续以 DB 为准
 DEFAULTS: dict[str, object] = {
-    "live_hot_min_unique_senders_24h": 3,
+    "live_hot_min_unique_senders_24h": 20,
     "live_hot_min_length": 2,
     "live_hot_max_length": 80,
     "live_noise_filters": ["晚安", "88888", "爆了", "+1"],
@@ -50,7 +50,8 @@ DEFAULTS: dict[str, object] = {
     "ratelimit_report_per_hour_per_ip": 60,
     "ratelimit_copy_per_hour_per_ip": 200,
     "ratelimit_promote_per_hour_per_ip": 5,
-    "raw_retention_days": 30,
+    "raw_retention_days": 2,
+    "daily_hot_retention_days": 7,
 }
 
 
