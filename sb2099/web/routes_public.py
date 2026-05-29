@@ -12,7 +12,6 @@ from sqlalchemy import select, text
 from .. import db as _db
 from ..models import Tag
 from ..search import search_barrage
-from ..settings import settings_cache
 from ._filters import register_filters
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -73,22 +72,39 @@ async def live_page(
     request: Request,
     window: Literal["day", "week"] = "day",
 ) -> HTMLResponse:
-    cnt_col, uniq_col, limit = (
-        ("send_cnt_24h", "unique_sender_cnt_24h", 10)
-        if window == "day"
-        else ("send_cnt_7d", "unique_sender_cnt_7d", 50)
-    )
-    min_unique = int(settings_cache.get("live_hot_min_unique_senders_24h", 3) or 0)
-    sql = text(
-        f"SELECT lh.id, lh.content_sample, lh.{cnt_col} AS send_cnt, lh.{uniq_col} AS unique_senders, "
-        f"lh.last_seen, b.id AS barrage_id, b.tags AS barrage_tags "
-        f"FROM live_hot lh "
-        f"LEFT JOIN barrage b ON b.content_norm = lh.content_norm AND b.status = 'active' "
-        f"WHERE lh.is_filtered=0 AND lh.{uniq_col} >= :min_unique "
-        f"ORDER BY lh.{cnt_col} DESC, lh.last_seen DESC LIMIT :limit"
-    )
+    from datetime import datetime, timedelta, timezone
+    from ..live_day import current_live_window
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    live_date, _ = current_live_window(now)
+    if window == "day":
+        sql = text(
+            "SELECT d.id, d.content_sample, d.send_cnt, d.unique_sender_cnt AS unique_senders, "
+            "d.last_seen, b.id AS barrage_id, b.tags AS barrage_tags "
+            "FROM daily_hot d "
+            "LEFT JOIN barrage b ON b.content_norm = d.content_norm AND b.status='active' "
+            "WHERE d.live_date = :d AND d.is_filtered = 0 "
+            "ORDER BY d.send_cnt DESC, d.last_seen DESC LIMIT 10"
+        )
+        params = {"d": live_date.isoformat()}
+    else:
+        wk_start = (live_date - timedelta(days=6)).isoformat()
+        sql = text(
+            "SELECT "
+            "  (SELECT d2.id FROM daily_hot d2 WHERE d2.content_norm=d.content_norm "
+            "     AND d2.live_date>=:wk ORDER BY d2.live_date DESC LIMIT 1) AS id, "
+            "  d.content_norm, "
+            "  (SELECT d2.content_sample FROM daily_hot d2 WHERE d2.content_norm=d.content_norm "
+            "     AND d2.live_date>=:wk ORDER BY d2.live_date DESC LIMIT 1) AS content_sample, "
+            "  SUM(d.send_cnt) AS send_cnt, MAX(d.unique_sender_cnt) AS unique_senders, "
+            "  MAX(d.last_seen) AS last_seen, b.id AS barrage_id, b.tags AS barrage_tags "
+            "FROM daily_hot d "
+            "LEFT JOIN barrage b ON b.content_norm = d.content_norm AND b.status='active' "
+            "WHERE d.live_date >= :wk AND d.is_filtered = 0 "
+            "GROUP BY d.content_norm ORDER BY send_cnt DESC, last_seen DESC LIMIT 50"
+        )
+        params = {"wk": wk_start}
     with _db.SessionLocal() as s:
-        rows = s.execute(sql, {"limit": limit, "min_unique": min_unique}).mappings().all()
+        rows = s.execute(sql, params).mappings().all()
     items = [
         {
             "id": r["id"],

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import __version__ as sb_version
 from .. import db as _db
-from ..models import Barrage, BarrageReport, LiveHot, Tag
+from ..models import Barrage, BarrageReport, DailyHot, Tag
 from ..normalize import normalize
 from ..ratelimit import extract_ip, ip_hash, limiter, rate_for
 from ..search import search_barrage
@@ -40,22 +40,40 @@ def list_tags() -> dict:
     }
 
 
-_LIVE_WINDOWS = {
-    "day": ("send_cnt_24h", "unique_sender_cnt_24h", 10),
-    "week": ("send_cnt_7d", "unique_sender_cnt_7d", 50),
-}
+def _live_rows(window: str):
+    from datetime import datetime, timezone
+    from ..live_day import current_live_window
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    live_date, _ = current_live_window(now)
+    if window == "day":
+        sql = text(
+            "SELECT id, content_sample, send_cnt, unique_sender_cnt AS unique_senders, last_seen "
+            "FROM daily_hot WHERE live_date = :d AND is_filtered = 0 "
+            "ORDER BY send_cnt DESC, last_seen DESC LIMIT 10"
+        )
+        params = {"d": live_date.isoformat()}
+    else:
+        from datetime import timedelta
+        wk_start = (live_date - timedelta(days=6)).isoformat()
+        sql = text(
+            "SELECT "
+            "  (SELECT d2.id FROM daily_hot d2 WHERE d2.content_norm=d.content_norm "
+            "     AND d2.live_date>=:wk ORDER BY d2.live_date DESC LIMIT 1) AS id, "
+            "  (SELECT d2.content_sample FROM daily_hot d2 WHERE d2.content_norm=d.content_norm "
+            "     AND d2.live_date>=:wk ORDER BY d2.live_date DESC LIMIT 1) AS content_sample, "
+            "  SUM(d.send_cnt) AS send_cnt, MAX(d.unique_sender_cnt) AS unique_senders, "
+            "  MAX(d.last_seen) AS last_seen "
+            "FROM daily_hot d WHERE d.live_date >= :wk AND d.is_filtered = 0 "
+            "GROUP BY d.content_norm ORDER BY send_cnt DESC, last_seen DESC LIMIT 50"
+        )
+        params = {"wk": wk_start}
+    with _db.SessionLocal() as s:
+        return s.execute(sql, params).mappings().all()
 
 
 @router.get("/live")
 def get_live(window: Literal["day", "week"] = "day") -> dict:
-    cnt_col, uniq_col, limit = _LIVE_WINDOWS[window]
-    sql = text(
-        f"SELECT id, content_sample, {cnt_col} AS send_cnt, {uniq_col} AS unique_senders, "
-        "last_seen FROM live_hot WHERE is_filtered=0 "
-        f"ORDER BY {cnt_col} DESC, last_seen DESC LIMIT :limit"
-    )
-    with _db.SessionLocal() as s:
-        rows = s.execute(sql, {"limit": limit}).mappings().all()
+    rows = _live_rows(window)
     return {
         "window": window,
         "data": [
@@ -241,11 +259,12 @@ def copy_one(request: Request, body: CopyIn) -> dict:
             if res.rowcount == 0:
                 raise HTTPException(status_code=404, detail="barrage not found")
             return {"data": {"source": "barrage", "id": body.id}}
+        # 公开 API 合约：source/字段名沿用 "live_hot"，底层实为 daily_hot
         else:
             res = s.execute(
-                update(LiveHot)
-                .where(LiveHot.id == body.id)
-                .values(page_copy_cnt=LiveHot.page_copy_cnt + 1)
+                update(DailyHot)
+                .where(DailyHot.id == body.id)
+                .values(page_copy_cnt=DailyHot.page_copy_cnt + 1)
             )
             s.commit()
             if res.rowcount == 0:
@@ -297,8 +316,9 @@ def promote(request: Request, body: PromoteIn) -> dict:
         raise HTTPException(status_code=400, detail=f"unknown tags: {invalid}")
 
     with _db.SessionLocal() as s:
+        # 公开 API 合约：source/字段名沿用 "live_hot"，底层实为 daily_hot
         hot = s.execute(
-            select(LiveHot).where(LiveHot.id == body.live_hot_id)
+            select(DailyHot).where(DailyHot.id == body.live_hot_id)
         ).scalar_one_or_none()
         if hot is None:
             raise HTTPException(status_code=404, detail="live_hot not found")

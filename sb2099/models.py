@@ -26,26 +26,23 @@ class RawDanmaku(Base):
     )
 
 
-class LiveHot(Base):
-    __tablename__ = "live_hot"
+class DailyHot(Base):
+    __tablename__ = "daily_hot"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    content_norm: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    live_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    content_norm: Mapped[str] = mapped_column(Text, nullable=False)
     content_sample: Mapped[str] = mapped_column(Text, nullable=False)
+    send_cnt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unique_sender_cnt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     first_seen: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_seen: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     page_copy_cnt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    send_cnt_24h: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    send_cnt_7d: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    send_cnt_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    unique_sender_cnt_24h: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    unique_sender_cnt_7d: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_filtered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
-        Index("ix_livehot_send24h", "send_cnt_24h"),
-        Index("ix_livehot_send7d", "send_cnt_7d"),
-        Index("ix_livehot_copy", "page_copy_cnt"),
-        Index("ix_livehot_lastseen", "last_seen"),
+        UniqueConstraint("live_date", "content_norm", name="uq_daily_live_norm"),
+        Index("ix_daily_date_send", "live_date", "send_cnt"),
+        Index("ix_daily_norm", "content_norm"),
     )
 
 
