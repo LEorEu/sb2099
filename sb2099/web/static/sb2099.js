@@ -21,6 +21,139 @@
     el._t = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
+  // ---- Withdraw Toast (60s window with countdown + click) ----
+  function withdrawToast(barrageId, windowSec) {
+    const total = Math.max(5, Math.min(300, parseInt(windowSec || 60, 10)));
+    let el = document.getElementById('sb-withdraw-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'sb-withdraw-toast';
+      document.body.appendChild(el);
+    }
+    let remaining = total;
+    let intervalId = null;
+    function render() {
+      el.innerHTML = `
+        <span class="msg">投稿已发布</span>
+        <button type="button" class="withdraw-btn">撤回 (${remaining}s)</button>
+      `;
+      el.querySelector('.withdraw-btn').addEventListener('click', async () => {
+        clearInterval(intervalId);
+        el.classList.remove('show');
+        const r = await fetch(`/api/submission/${barrageId}/withdraw`, { method: 'DELETE' });
+        if (r.ok) {
+          toast('已撤回', true);
+          setTimeout(() => location.reload(), 800);
+        } else if (r.status === 410) {
+          toast('撤回窗口已过期', false);
+        } else {
+          toast('撤回失败', false);
+        }
+      });
+    }
+    render();
+    el.className = 'withdraw-toast show';
+    intervalId = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(intervalId);
+        el.classList.remove('show');
+        return;
+      }
+      const btn = el.querySelector('.withdraw-btn');
+      if (btn) btn.textContent = `撤回 (${remaining}s)`;
+    }, 1000);
+  }
+
+  // ---- User Picker Widget ----
+  // 每个带 [data-user-picker] 的容器接管：搜索 /api/users/search、选中、清除、匿名切换。
+  function wireUserPicker(root) {
+    if (!root || root.dataset.wired === '1') return;
+    root.dataset.wired = '1';
+    const hidden = root.querySelector('input[name="submitter_uid"]');
+    const trigger = root.querySelector('.user-picker-trigger');
+    const placeholder = root.querySelector('.user-picker-placeholder');
+    const chip = root.querySelector('.user-picker-chip');
+    const chipAvatar = chip.querySelector('.user-picker-avatar');
+    const chipName = chip.querySelector('.user-picker-name');
+    const chipClear = chip.querySelector('.user-picker-clear');
+    const searchBox = root.querySelector('.user-picker-search');
+    const searchInput = root.querySelector('.user-picker-input');
+    const resultsEl = root.querySelector('.user-picker-results');
+
+    function clearPick() {
+      hidden.value = '';
+      chip.hidden = true;
+      placeholder.hidden = false;
+    }
+    function pickUser(uid, nickname, avatar) {
+      hidden.value = uid;
+      chip.hidden = false;
+      placeholder.hidden = true;
+      chipName.textContent = nickname || `uid ${uid}`;
+      if (avatar) {
+        chipAvatar.src = avatar;
+        chipAvatar.hidden = false;
+      } else {
+        chipAvatar.hidden = true;
+      }
+      searchBox.hidden = true;
+      resultsEl.innerHTML = '';
+      searchInput.value = '';
+    }
+
+    chipClear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearPick();
+    });
+
+    trigger.addEventListener('click', () => {
+      if (hidden.value) return; // 已选中状态点 trigger 不展开（避免误触）
+      searchBox.hidden = !searchBox.hidden;
+      if (!searchBox.hidden) searchInput.focus();
+    });
+
+    let debounceId = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceId);
+      const q = searchInput.value.trim();
+      if (q.length < 3) {
+        resultsEl.innerHTML = '';
+        return;
+      }
+      debounceId = setTimeout(async () => {
+        try {
+          const r = await getJSON(`/api/users/search?q=${encodeURIComponent(q)}`);
+          const items = r.results || [];
+          if (items.length === 0) {
+            resultsEl.innerHTML = '<li class="empty">没找到匹配用户</li>';
+            return;
+          }
+          resultsEl.innerHTML = '';
+          items.forEach(u => {
+            const li = document.createElement('li');
+            li.className = 'user-result';
+            li.innerHTML = `
+              ${u.avatar ? `<img src="${u.avatar}" alt="">` : '<div class="no-avatar"></div>'}
+              <span class="nick">${escapeHtml(u.nickname || '')}</span>
+              <span class="uid">uid ${u.uid}</span>
+            `;
+            li.addEventListener('click', () => pickUser(u.uid, u.nickname, u.avatar));
+            resultsEl.appendChild(li);
+          });
+        } catch (e) {
+          resultsEl.innerHTML = '<li class="empty">搜索失败</li>';
+        }
+      }, 250);
+    });
+  }
+
+  function escapeHtml(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
   // ---- Fetch Utils ----
   async function getJSON(path) {
     const res = await fetch(path);
@@ -188,11 +321,18 @@
 
       items.forEach(it => {
         const li = document.createElement('li');
+        const submitterHtml = it.submitter
+          ? `<span class="submitter-badge" title="由 ${escapeHtml(it.submitter.nickname || '')} 投稿">
+               ${it.submitter.avatar ? `<img src="${it.submitter.avatar}" alt="">` : ''}
+               <span>${escapeHtml(it.submitter.nickname || '')}</span>
+             </span>`
+          : '';
         li.innerHTML = `
           <div class="content">${escapeHtml(it.content)}</div>
           <div class="meta">
             <span>#${it.id}</span>
             <span>复制 ${it.cnt}</span>
+            ${submitterHtml}
           </div>
           <div class="actions">
             <button class="primary" data-action="copy" data-source="barrage" data-id="${it.id}" data-content="${escapeHtml(it.content)}">一键复制</button>
@@ -203,15 +343,6 @@
     } catch (e) {
       previewList.innerHTML = '<p class="empty" style="color:var(--error)">加载最新投稿预览失败</p>';
     }
-  }
-
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
   }
 
   // ---- Theme Toggle ----
@@ -338,13 +469,32 @@
     if (!content) { toast('投稿内容不能为空！', false); return; }
     if (tags.length === 0) { toast('必须至少选择 1 个 Tag 标签', false); return; }
 
+    // 收集 submitter_uid + 匿名选项（picker 在表单内时才有）
+    const picker = form.querySelector('[data-user-picker]');
+    let submitterUid = null;
+    if (picker) {
+      const uid = picker.querySelector('input[name="submitter_uid"]').value;
+      const anon = picker.querySelector('input[name="anonymous"]').checked;
+      if (uid && !anon) submitterUid = uid;
+    }
+
     if (isMainForm || (isModalForm && document.getElementById('modal-mode').value === 'normal')) {
       // Normal Submission
-      const r = await postJSON('/api/barrage', { content, tags });
+      const r = await postJSON('/api/barrage', { content, tags, submitter_uid: submitterUid });
       if (r.ok) {
         const status = r.data?.data?.status;
+        const newId = r.data?.data?.id;
         toast(status === 'pending' ? '投稿已提交，进入待审队列！' : '投稿提交成功，已正式入库！', true);
+        // active 状态才弹撤回 toast（pending 稿等管理员决定，撤回意义不大）
+        if (status === 'active' && newId) {
+          withdrawToast(newId, 60);
+        }
         form.reset();
+        if (picker) {
+          picker.querySelector('input[name="submitter_uid"]').value = '';
+          picker.querySelector('.user-picker-chip').hidden = true;
+          picker.querySelector('.user-picker-placeholder').hidden = false;
+        }
         modal.close();
         // Dynamic reload components or reload page
         setTimeout(() => {
@@ -366,11 +516,20 @@
     } else if (isModalForm && document.getElementById('modal-mode').value === 'promote') {
       // Promotion Mode
       const hotId = parseInt(document.getElementById('modal-item-id').value, 10);
-      const r = await postJSON('/api/promote', { live_hot_id: hotId, tags });
+      const r = await postJSON('/api/promote', { live_hot_id: hotId, tags, submitter_uid: submitterUid });
       if (r.ok) {
         const status = r.data?.data?.status;
+        const newId = r.data?.data?.id;
         toast(status === 'pending' ? '已成功补充标签，待管理员审核入库！' : '已补充标签，正式合并入投稿库！', true);
+        if (status === 'active' && newId) {
+          withdrawToast(newId, 60);
+        }
         form.reset();
+        if (picker) {
+          picker.querySelector('input[name="submitter_uid"]').value = '';
+          picker.querySelector('.user-picker-chip').hidden = true;
+          picker.querySelector('.user-picker-placeholder').hidden = false;
+        }
         modal.close();
         setTimeout(() => location.reload(), 1000);
       } else if (r.status === 409) {
@@ -388,6 +547,9 @@
   // ---- Page Init ----
   function init() {
     modal.init();
+
+    // Wire 所有静态投稿表单里的 user picker（home + modal）
+    document.querySelectorAll('[data-user-picker]').forEach(wireUserPicker);
 
     // Check if on Home Page
     const isHomePage = document.getElementById('home-random-card') !== null;

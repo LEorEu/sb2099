@@ -17,7 +17,6 @@ class Settings(BaseSettings):
 
     SB2099_ADMIN_TOKEN: str = Field(..., min_length=6)
     SB2099_IP_SALT: str = Field(..., min_length=8)
-    DOUYU_LIVE_WS_URL: str = "ws://139.196.96.110:8080/ws/live"
     DOUYU_ROOM_ID: int = 12740109
     SB2099_DB_PATH: str = "./sb2099.db"
 
@@ -53,6 +52,12 @@ DEFAULTS: dict[str, object] = {
     "ratelimit_promote_per_hour_per_ip": 5,
     "raw_retention_days": 2,
     "daily_hot_retention_days": 7,
+    "submission_anti_fraud_enabled": True,
+    "submission_uid_multi_ip_window_days": 7,
+    "submission_uid_multi_ip_threshold": 5,
+    "submission_uid_inactive_days": 30,
+    "submission_uid_unseen_blocks": True,
+    "submission_withdraw_window_seconds": 60,
 }
 
 

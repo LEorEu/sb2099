@@ -1,12 +1,14 @@
 """投稿库搜索：FTS5 全文 + tag CSV 任一匹配 + sort 排序 + 仅 active 状态。
 
-公开页 `/barrage` 与 `/api/barrage` 共用。
+公开页 `/barrage` 与 `/api/barrage` 共用。LEFT JOIN user 拿投稿者昵称/头像，
+**uid 不暴露给前端**（隐私最小化），只返回 submitter: null | {nickname, avatar}。
 """
 from __future__ import annotations
 
 from sqlalchemy import text
 
 from . import db as _db
+from .users import avatar_url
 
 __all__ = ["search_barrage"]
 
@@ -66,8 +68,10 @@ def search_barrage(
 
     list_sql = text(
         f"""
-        SELECT b.id, b.content, b.tags, b.cnt, b.submit_time, b.status
+        SELECT b.id, b.content, b.tags, b.cnt, b.submit_time, b.status,
+               u.nickname AS submitter_nickname, u.avatar AS submitter_avatar
         FROM barrage b {join}
+        LEFT JOIN user u ON u.uid = b.submitter_uid
         WHERE {where_sql}
         ORDER BY {order_sql}
         LIMIT :limit OFFSET :offset
@@ -94,6 +98,14 @@ def search_barrage(
             "tags": r["tags"],
             "cnt": r["cnt"],
             "submit_time": _iso(r["submit_time"]),
+            "submitter": (
+                {
+                    "nickname": r["submitter_nickname"],
+                    "avatar": avatar_url(r["submitter_avatar"]),
+                }
+                if r["submitter_nickname"]
+                else None
+            ),
         }
         for r in rows
     ]

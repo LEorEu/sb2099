@@ -57,6 +57,24 @@
               </label>
             {% endfor %}
           </div>
+          <div class="user-picker" data-user-picker>
+            <input type="hidden" name="submitter_uid" value="">
+            <button type="button" class="user-picker-trigger">
+              <span class="user-picker-placeholder">选择我是谁（可选）</span>
+              <div class="user-picker-chip" hidden>
+                <img class="user-picker-avatar" alt="">
+                <span class="user-picker-name"></span>
+                <span class="user-picker-clear" title="清除">×</span>
+              </div>
+            </button>
+            <div class="user-picker-search" hidden>
+              <input type="text" class="user-picker-input" placeholder="昵称或 UID（≥3 字符）" autocomplete="off">
+              <ul class="user-picker-results"></ul>
+            </div>
+            <label class="user-picker-anon">
+              <input type="checkbox" name="anonymous"> 本条匿名投稿（仍可绑定身份，本条不署名）
+            </label>
+          </div>
           <button type="submit" class="btn btn-primary" style="width: 100%; border-radius: 8px;">提交投稿</button>
         </form>
       </div>

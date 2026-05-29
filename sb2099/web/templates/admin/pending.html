@@ -13,26 +13,67 @@
   </div>
 {% else %}
   <ul class="admin-list animate-fade">
-    {% for it in items %}
+    {% for entry in items %}
+      {% set it = entry.row %}
       <li class="glass-card" style="margin-bottom: 16px; padding: 20px 24px; border-color: hsla(38, 92%, 50%, 0.2);">
         <div class="content" style="font-size: 15px; font-weight: 500; color: #fff;">{{ it.content }}</div>
-        
+
         <div class="meta" style="margin: 8px 0 16px;">
           <span style="color: var(--warning); border-color: hsla(38, 92%, 50%, 0.3); background: hsla(38, 92%, 50%, 0.05); font-weight: 600;"># 待审条目</span>
           <span>ID: #{{ it.id }}</span>
           <span>原分类 Tags: {{ it.tags }}</span>
           <span>提交时间: {{ it.submit_time | cst_long }}</span>
+          {% if it.review_reason %}
+            <span style="color: var(--error); background: hsla(354, 75%, 55%, 0.08); border-color: hsla(354, 75%, 55%, 0.3);">命中规则: {{ it.review_reason }}</span>
+          {% endif %}
         </div>
-        
+
+        {% if entry.submitter %}
+          <div class="pending-submitter-box">
+            <div class="submitter-head">
+              {% if entry.submitter.avatar %}
+                <img src="{{ entry.submitter.avatar }}" alt="">
+              {% endif %}
+              <div class="submitter-info">
+                <div><strong>{{ entry.submitter.nickname or '(无昵称)' }}</strong>
+                  <span style="font-size: 11px; color: var(--fg-subtle); margin-left: 6px;">uid {{ entry.submitter.uid }}</span>
+                </div>
+                <div style="font-size: 11px; color: var(--fg-subtle);">最后说话: {{ entry.submitter.last_seen | cst_long }}</div>
+              </div>
+            </div>
+            {% if entry.recent_danmaku %}
+              <div class="submitter-recent-title">最近 {{ entry.recent_danmaku|length }} 条弹幕</div>
+              <ul class="submitter-recent">
+                {% for d in entry.recent_danmaku %}
+                  <li>
+                    <span class="ts">{{ d.ts | cst_long }}</span>
+                    <span class="content">{{ d.content }}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div style="font-size: 11px; color: var(--fg-subtle); margin-top: 6px;">该 uid 在 raw_danmaku 里查不到记录（可能是 0 弹幕用户 / raw 已被 2 天清理）。</div>
+            {% endif %}
+          </div>
+        {% elif it.submitter_uid %}
+          <div class="pending-submitter-box" style="color: var(--fg-subtle); font-size: 12px;">
+            投稿声明了 uid={{ it.submitter_uid }} 但 user 表里找不到（被踢出名册？应已降级为匿名）
+          </div>
+        {% else %}
+          <div class="pending-submitter-box" style="color: var(--fg-subtle); font-size: 12px;">
+            匿名投稿（IP hash: {{ it.submitter_ip_hash or '—' }}）
+          </div>
+        {% endif %}
+
         <div class="actions" style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
           <!-- Approve form allows editing tags before approval -->
           <form method="post" action="/admin/barrage/{{ it.id }}/approve" style="display: inline-flex; gap: 8px; align-items: center; flex: 1; max-width: 480px;">
             <input type="text" name="tags" value="{{ it.tags }}" placeholder="可在过审时修正常用 Tag 标签 (如 00,02)" required style="flex: 1; min-width: 200px;">
             <button type="submit" class="btn btn-primary" style="padding: 6px 16px; font-size: 12px; background: linear-gradient(135deg, var(--success) 0%, hsl(145, 65%, 35%) 100%); box-shadow: 0 0 12px hsla(145, 65%, 45%, 0.3); border-color: transparent;">✓ 审批通过</button>
           </form>
-          
+
           <!-- Reject form -->
-          <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('⚠️ 确认要“拒绝并回收”该条投稿吗？拒绝后条目将进入回收站。')" style="display: inline-block;">
+          <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('⚠️ 确认要"拒绝并回收"该条投稿吗？拒绝后条目将进入回收站。')" style="display: inline-block;">
             <button type="submit" class="btn btn-secondary danger" style="padding: 6px 16px; font-size: 12px;">✕ 拒绝并移入回收站</button>
           </form>
         </div>
@@ -40,5 +81,53 @@
     {% endfor %}
   </ul>
 {% endif %}
+
+<style>
+.pending-submitter-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.pending-submitter-box .submitter-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pending-submitter-box .submitter-head img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.pending-submitter-box .submitter-info { flex: 1; }
+.pending-submitter-box .submitter-recent-title {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pending-submitter-box .submitter-recent {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.pending-submitter-box .submitter-recent li {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.pending-submitter-box .submitter-recent .ts {
+  color: var(--fg-subtle);
+  font-family: monospace;
+  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+.pending-submitter-box .submitter-recent .content { color: var(--fg); }
+</style>
 
 {% endblock %}

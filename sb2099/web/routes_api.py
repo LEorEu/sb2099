@@ -1,24 +1,78 @@
 """/api/* JSON 路由 — 切片 R 只读 + 切片 W 写入。/admin 留给 A。"""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import time
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from .. import __version__ as sb_version
 from .. import db as _db
-from ..models import Barrage, BarrageReport, DailyHot, Tag
+from ..config import get_settings
+from ..models import Barrage, BarrageReport, DailyHot, Tag, User
 from ..normalize import normalize
 from ..ratelimit import extract_ip, ip_hash, limiter, rate_for
 from ..search import search_barrage
 from ..settings import settings_cache
-from ..submission import evaluate
+from ..submission import evaluate, review_uid
 
 router = APIRouter(prefix="/api")
+
+
+# ---- 撤回窗口的 HMAC cookie 工具 -----------------------------------------
+
+
+def _hmac_token(barrage_id: int, ip_h: str, expires_at: int) -> str:
+    """token = base16(HMAC-SHA256(salt, "<id>.<ip>.<exp>")) + ".<exp>"
+
+    payload 含 expires_at；ip_hash 也参与 HMAC，防止 cookie 被换 IP 复用。
+    """
+    salt = get_settings().SB2099_IP_SALT.encode()
+    msg = f"{barrage_id}.{ip_h}.{expires_at}".encode()
+    sig = hmac.new(salt, msg, hashlib.sha256).hexdigest()
+    return f"{sig}.{expires_at}"
+
+
+def _hmac_verify(token: str, barrage_id: int, ip_h: str) -> int | None:
+    """验证 token 并返回 expires_at；任何环节失败返回 None。"""
+    if not token or "." not in token:
+        return None
+    sig, _, exp_str = token.partition(".")
+    try:
+        expires_at = int(exp_str)
+    except ValueError:
+        return None
+    expected = _hmac_token(barrage_id, ip_h, expires_at).split(".", 1)[0]
+    if not hmac.compare_digest(sig, expected):
+        return None
+    return expires_at
+
+
+def _withdraw_window_seconds() -> int:
+    try:
+        return max(1, int(settings_cache.get("submission_withdraw_window_seconds", 60) or 60))
+    except (TypeError, ValueError):
+        return 60
+
+
+def _set_recent_cookie(response: Response, barrage_id: int, ip_h: str) -> None:
+    window = _withdraw_window_seconds()
+    expires_at = int(time.time()) + window
+    token = _hmac_token(barrage_id, ip_h, expires_at)
+    response.set_cookie(
+        key=f"sb_recent_{barrage_id}",
+        value=token,
+        max_age=window,
+        httponly=True,
+        samesite="strict",
+        path="/",
+    )
 
 
 # ---- read-only (slice R) -------------------------------------------------
@@ -105,17 +159,77 @@ def get_barrage(
     return {"data": search_barrage(q=q, tags=tags, sort=sort, page=page, size=size)}
 
 
+@router.get("/users/search")
+@limiter.limit(lambda: rate_for("ratelimit_copy_per_hour_per_ip", 200))
+def search_users(request: Request, q: str = "", limit: int = 10) -> dict:
+    """昵称模糊搜索；q 全数字时按 uid 前缀。
+
+    返回上限 10 条，按 last_seen 倒序。**只返 nickname + avatar，不返 uid**——
+    avatar 是斗鱼 CDN 完整 URL；前端获取 uid 走另一路（投稿请求里带 uid 时由该端点
+    返回的列表项自己附带，下面 results 里仍含 uid 字段供前端选中后回传，但不公开列举）。
+
+    要求 q > 2 字符；空 / 单双字 q 一律返回空列表，避免被批量拉名册。
+    """
+    from ..users import avatar_url
+
+    q = (q or "").strip()
+    if len(q) <= 2:
+        return {"results": []}
+    limit = max(1, min(int(limit or 10), 10))
+
+    with _db.SessionLocal() as s:
+        if q.isdigit():
+            stmt = (
+                select(User.uid, User.nickname, User.avatar)
+                .where(User.uid.like(f"{q}%"))
+                .order_by(User.last_seen.desc())
+                .limit(limit)
+            )
+        else:
+            stmt = (
+                select(User.uid, User.nickname, User.avatar)
+                .where(User.nickname.like(f"%{q}%"))
+                .order_by(User.last_seen.desc())
+                .limit(limit)
+            )
+        rows = s.execute(stmt).all()
+
+    return {
+        "results": [
+            {"uid": r.uid, "nickname": r.nickname, "avatar": avatar_url(r.avatar)}
+            for r in rows
+        ]
+    }
+
+
 @router.get("/random")
 def get_random() -> dict:
+    from ..users import avatar_url
+
     with _db.SessionLocal() as s:
         row = s.execute(
-            select(Barrage.id, Barrage.content, Barrage.tags, Barrage.cnt, Barrage.submit_time)
+            select(
+                Barrage.id,
+                Barrage.content,
+                Barrage.tags,
+                Barrage.cnt,
+                Barrage.submit_time,
+                User.nickname.label("submitter_nickname"),
+                User.avatar.label("submitter_avatar"),
+            )
+            .outerjoin(User, User.uid == Barrage.submitter_uid)
             .where(Barrage.status == "active")
             .order_by(func.random())
             .limit(1)
         ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="empty barrage library")
+    submitter = None
+    if row.submitter_nickname:
+        submitter = {
+            "nickname": row.submitter_nickname,
+            "avatar": avatar_url(row.submitter_avatar),
+        }
     return {
         "data": {
             "id": row.id,
@@ -123,6 +237,7 @@ def get_random() -> dict:
             "tags": row.tags,
             "cnt": row.cnt,
             "submit_time": row.submit_time.isoformat() if row.submit_time else None,
+            "submitter": submitter,
         }
     }
 
@@ -138,6 +253,7 @@ def get_userscript_version() -> dict:
 class SubmitIn(BaseModel):
     content: str
     tags: list[str] = Field(min_length=1)
+    submitter_uid: str | None = None  # 可选；NULL=匿名
 
     @field_validator("tags")
     @classmethod
@@ -146,6 +262,14 @@ class SubmitIn(BaseModel):
         if not cleaned:
             raise ValueError("at least one tag required")
         return cleaned
+
+    @field_validator("submitter_uid")
+    @classmethod
+    def _uid_clean(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
 
 def _barrage_to_dict(row) -> dict:
@@ -159,6 +283,14 @@ def _barrage_to_dict(row) -> dict:
     }
 
 
+def _resolve_submitter_uid(session, uid: str | None) -> str | None:
+    """uid 必须在 user 表里才视为有效；否则当匿名处理（不报错）。"""
+    if not uid:
+        return None
+    found = session.execute(select(User.uid).where(User.uid == uid)).scalar_one_or_none()
+    return found
+
+
 def _enabled_tag_values() -> set[str]:
     with _db.SessionLocal() as s:
         return set(
@@ -168,7 +300,7 @@ def _enabled_tag_values() -> set[str]:
 
 @router.post("/barrage", status_code=201)
 @limiter.limit(lambda: rate_for("ratelimit_submit_per_hour_per_ip", 5))
-def submit_barrage(request: Request, body: SubmitIn) -> dict:
+def submit_barrage(request: Request, response: Response, body: SubmitIn) -> dict:
     # 长度
     min_len = int(settings_cache.get("barrage_min_length", 4) or 4)
     max_len = int(settings_cache.get("barrage_max_length", 255) or 255)
@@ -200,7 +332,7 @@ def submit_barrage(request: Request, body: SubmitIn) -> dict:
                 detail={"message": "duplicate", "existing": _barrage_to_dict(existing)},
             )
 
-    # submission_review_rules
+    # submission_review_rules（内容规则）
     rules = settings_cache.get("submission_review_rules", []) or []
     verdict = evaluate(content, rules)
     if verdict.action == "block":
@@ -208,20 +340,36 @@ def submit_barrage(request: Request, body: SubmitIn) -> dict:
             status_code=422,
             detail={"message": "blocked", "matched_pattern": verdict.matched_pattern},
         )
-    status = "pending" if verdict.action == "pending" else "active"
 
-    row_data = {
-        "content": content,
-        "content_norm": content_norm,
-        "tags": ",".join(sorted(set(body.tags))),
-        "source": "user",
-        "submitter_ip_hash": ip_hash(extract_ip(request)),
-        "submit_time": datetime.utcnow(),
-        "cnt": 0,
-        "report_cnt": 0,
-        "status": status,
-    }
+    ip_h = ip_hash(extract_ip(request))
     with _db.SessionLocal() as s:
+        # uid 校验 + 防伪探测器
+        resolved_uid = _resolve_submitter_uid(s, body.submitter_uid)
+        review_reason: str | None = None
+        if verdict.action == "pending":
+            review_reason = f"content_rule:{verdict.matched_pattern}"
+            status = "pending"
+        else:
+            status = "active"
+        if status == "active" and resolved_uid is not None:
+            uid_pending, uid_reason = review_uid(s, resolved_uid, ip_h)
+            if uid_pending:
+                status = "pending"
+                review_reason = uid_reason
+
+        row_data = {
+            "content": content,
+            "content_norm": content_norm,
+            "tags": ",".join(sorted(set(body.tags))),
+            "source": "user",
+            "submitter_ip_hash": ip_h,
+            "submitter_uid": resolved_uid,
+            "submit_time": datetime.utcnow(),
+            "cnt": 0,
+            "report_cnt": 0,
+            "status": status,
+            "review_reason": review_reason,
+        }
         try:
             new = Barrage(**row_data)
             s.add(new)
@@ -237,6 +385,7 @@ def submit_barrage(request: Request, body: SubmitIn) -> dict:
                 status_code=409,
                 detail={"message": "duplicate", "existing": _barrage_to_dict(existing)},
             )
+        _set_recent_cookie(response, new.id, ip_h)
         return {"data": _barrage_to_dict(new)}
 
 
@@ -305,11 +454,20 @@ def report_barrage(request: Request, body: ReportIn) -> dict:
 class PromoteIn(BaseModel):
     live_hot_id: int
     tags: list[str] = Field(min_length=1)
+    submitter_uid: str | None = None
+
+    @field_validator("submitter_uid")
+    @classmethod
+    def _uid_clean(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
 
 @router.post("/promote", status_code=201)
 @limiter.limit(lambda: rate_for("ratelimit_promote_per_hour_per_ip", 5))
-def promote(request: Request, body: PromoteIn) -> dict:
+def promote(request: Request, response: Response, body: PromoteIn) -> dict:
     enabled = _enabled_tag_values()
     invalid = [t for t in body.tags if t not in enabled]
     if invalid:
@@ -341,18 +499,33 @@ def promote(request: Request, body: PromoteIn) -> dict:
                 status_code=422,
                 detail={"message": "blocked", "matched_pattern": verdict.matched_pattern},
             )
-        status = "pending" if verdict.action == "pending" else "active"
+
+        ip_h = ip_hash(extract_ip(request))
+        resolved_uid = _resolve_submitter_uid(s, body.submitter_uid)
+        review_reason: str | None = None
+        if verdict.action == "pending":
+            review_reason = f"content_rule:{verdict.matched_pattern}"
+            status = "pending"
+        else:
+            status = "active"
+        if status == "active" and resolved_uid is not None:
+            uid_pending, uid_reason = review_uid(s, resolved_uid, ip_h)
+            if uid_pending:
+                status = "pending"
+                review_reason = uid_reason
 
         new = Barrage(
             content=content,
             content_norm=content_norm,
             tags=",".join(sorted(set(body.tags))),
             source="promoted",
-            submitter_ip_hash=ip_hash(extract_ip(request)),
+            submitter_ip_hash=ip_h,
+            submitter_uid=resolved_uid,
             submit_time=datetime.utcnow(),
             cnt=0,
             report_cnt=0,
             status=status,
+            review_reason=review_reason,
         )
         s.add(new)
         try:
@@ -361,4 +534,30 @@ def promote(request: Request, body: PromoteIn) -> dict:
         except IntegrityError:
             s.rollback()
             raise HTTPException(status_code=409, detail="duplicate (race)")
+        _set_recent_cookie(response, new.id, ip_h)
         return {"data": _barrage_to_dict(new)}
+
+
+@router.delete("/submission/{barrage_id}/withdraw")
+def withdraw(barrage_id: int, request: Request) -> dict:
+    """60s 内可撤回自己刚发的稿。只校验 cookie HMAC + IP 一致 + 未过期。
+
+    管理员状态完全不参与判断（即使 admin 已审/已软删，物理 DELETE 都是幂等的）。
+    """
+    cookie = request.cookies.get(f"sb_recent_{barrage_id}")
+    if not cookie:
+        raise HTTPException(status_code=404, detail="no withdraw token")
+    ip_h = ip_hash(extract_ip(request))
+    expires_at = _hmac_verify(cookie, barrage_id, ip_h)
+    if expires_at is None:
+        raise HTTPException(status_code=403, detail="invalid withdraw token")
+    if int(time.time()) > expires_at:
+        raise HTTPException(status_code=410, detail="withdraw window expired")
+    with _db.SessionLocal() as s:
+        row = s.execute(select(Barrage).where(Barrage.id == barrage_id)).scalar_one_or_none()
+        if row is None:
+            # 已被删除（admin 软删后又被清理 / 重复撤回），幂等返回
+            return {"data": {"id": barrage_id, "already_gone": True}}
+        s.delete(row)
+        s.commit()
+    return {"data": {"id": barrage_id, "withdrawn": True}}

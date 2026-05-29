@@ -1,4 +1,4 @@
-"""chat 事件聚合：只把 chat 事件写入 raw_danmaku。
+"""chat 事件聚合：把 chat 事件写入 raw_danmaku，并维护 user 名册。
 
 热词聚合（daily_hot upsert）移至 recount_cron，不再在此处进行。
 """
@@ -9,16 +9,22 @@ import logging
 import unicodedata
 from datetime import datetime, timezone
 
+from sqlalchemy import case
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from .. import db as _db
-from ..models import RawDanmaku
+from ..models import RawDanmaku, User
 from ..normalize import normalize
 from ..settings import settings_cache
 
 log = logging.getLogger(__name__)
 
-__all__ = ["persist_chat_event", "should_filter", "normalized_suffix_strips"]
+__all__ = [
+    "persist_chat_event",
+    "persist_user_from_chat",
+    "should_filter",
+    "normalized_suffix_strips",
+]
 
 
 def _normalized_filters() -> list[str]:
@@ -124,3 +130,48 @@ def _persist_sync(evt: dict) -> None:
 
 async def persist_chat_event(evt: dict) -> None:
     await asyncio.to_thread(_persist_sync, evt)
+
+
+def _persist_user_sync(evt: dict) -> None:
+    """chat 事件 → upsert user 表。空值不覆盖已有数据。"""
+    uid = evt.get("uid")
+    if not uid:
+        return
+    ts_ms = evt.get("ts")
+    if not isinstance(ts_ms, (int, float)):
+        return
+    now = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).replace(tzinfo=None)
+    nickname = evt.get("nickname")
+    avatar = evt.get("ic")
+
+    stmt = sqlite_insert(User).values(
+        uid=uid,
+        nickname=nickname,
+        avatar=avatar,
+        first_seen=now,
+        last_seen=now,
+        source="live",
+    )
+    excluded = stmt.excluded
+    # 已存在时：非空字段才覆盖；source 不动（保留 seed 的就是 seed）
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["uid"],
+        set_={
+            "nickname": case(
+                (excluded.nickname.is_not(None), excluded.nickname),
+                else_=User.nickname,
+            ),
+            "avatar": case(
+                (excluded.avatar.is_not(None), excluded.avatar),
+                else_=User.avatar,
+            ),
+            "last_seen": excluded.last_seen,
+        },
+    )
+    with _db.SessionLocal() as session:
+        session.execute(stmt)
+        session.commit()
+
+
+async def persist_user_from_chat(evt: dict) -> None:
+    await asyncio.to_thread(_persist_user_sync, evt)

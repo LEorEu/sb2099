@@ -49,7 +49,6 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SB2099_ADMIN_TOKEN", "test_token_" + "x" * 16)
     monkeypatch.setenv("SB2099_IP_SALT", "test_salt_" + "x" * 8)
     monkeypatch.setenv("SB2099_DB_PATH", str(db_path))
-    monkeypatch.setenv("DOUYU_LIVE_WS_URL", "ws://127.0.0.1:1/none")
 
     # 清掉可能已 cache 的 settings 单例
     from sb2099 import config as _cfg

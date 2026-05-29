@@ -75,10 +75,12 @@ class Barrage(Base):
     tags: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(String(16), default="user", nullable=False)
     submitter_ip_hash: Mapped[str | None] = mapped_column(String(32))
+    submitter_uid: Mapped[str | None] = mapped_column(Text)
     submit_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     cnt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     report_cnt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    review_reason: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         Index("ix_barrage_submit", "submit_time"),

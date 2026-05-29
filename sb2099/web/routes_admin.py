@@ -16,8 +16,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, desc, func, select, text, update
 
 from .. import db as _db
-from ..models import Barrage, BarrageReport, DailyHot, RawDanmaku, Setting, Tag
+from ..models import Barrage, BarrageReport, DailyHot, RawDanmaku, Setting, Tag, User
 from ..settings import settings_cache
+from ..users import avatar_url
 from ._filters import register_filters
 from .admin_auth import COOKIE_MAX_AGE, COOKIE_NAME, require_admin, verify_token
 
@@ -393,8 +394,44 @@ def pending_page(
             .order_by(desc(Barrage.submit_time))
             .limit(200)
         ).scalars().all()
+
+        # 收集所有非空 submitter_uid，一次 IN 查 user 表
+        uids = [r.submitter_uid for r in rows if r.submitter_uid]
+        users: dict[str, User] = {}
+        if uids:
+            for u in s.execute(select(User).where(User.uid.in_(set(uids)))).scalars().all():
+                users[u.uid] = u
+
+        items: list[dict] = []
+        for r in rows:
+            user = users.get(r.submitter_uid) if r.submitter_uid else None
+            recent: list[dict] = []
+            if r.submitter_uid:
+                recent_rows = s.execute(
+                    select(RawDanmaku.ts, RawDanmaku.content_raw)
+                    .where(RawDanmaku.uid == r.submitter_uid)
+                    .order_by(desc(RawDanmaku.ts))
+                    .limit(5)
+                ).all()
+                recent = [{"ts": rr.ts, "content": rr.content_raw} for rr in recent_rows]
+            items.append(
+                {
+                    "row": r,
+                    "submitter": (
+                        {
+                            "uid": user.uid,
+                            "nickname": user.nickname,
+                            "avatar": avatar_url(user.avatar),
+                            "last_seen": user.last_seen,
+                        }
+                        if user
+                        else None
+                    ),
+                    "recent_danmaku": recent,
+                }
+            )
     return templates.TemplateResponse(
-        request=request, name="admin/pending.html", context={"items": rows}
+        request=request, name="admin/pending.html", context={"items": items}
     )
 
 

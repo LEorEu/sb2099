@@ -1385,3 +1385,178 @@ body.admin .topbar nav .logout:hover {
   text-align: center;
   line-height: 1.4;
 }
+
+/* ===== User Picker (投稿表单的"选择我是谁") ===== */
+.user-picker {
+  margin: 10px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.user-picker-trigger {
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  color: var(--fg-muted);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.user-picker-trigger:hover {
+  border-color: var(--border-focus);
+  background: var(--bg-input-strong);
+}
+.user-picker-placeholder { color: var(--fg-subtle); }
+.user-picker-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(var(--accent-rgb), 0.15);
+  padding: 2px 8px 2px 2px;
+  border-radius: 12px;
+  color: var(--fg);
+}
+.user-picker-chip[hidden] { display: none; }
+.user-picker-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.user-picker-clear {
+  cursor: pointer;
+  color: var(--fg-subtle);
+  font-size: 14px;
+  padding: 0 4px;
+}
+.user-picker-clear:hover { color: var(--error); }
+.user-picker-search {
+  background: var(--bg-input-strong);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+.user-picker-search[hidden] { display: none; }
+.user-picker-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.user-picker-input:focus {
+  border-color: var(--border-focus);
+  outline: none;
+}
+.user-picker-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.user-picker-results .user-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.user-picker-results .user-result:hover {
+  background: var(--bg-elev-hover);
+}
+.user-picker-results .user-result img,
+.user-picker-results .user-result .no-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-input);
+}
+.user-picker-results .user-result .nick {
+  flex: 1;
+  color: var(--fg);
+}
+.user-picker-results .user-result .uid {
+  font-size: 10px;
+  color: var(--fg-subtle);
+}
+.user-picker-results .empty {
+  padding: 8px;
+  color: var(--fg-subtle);
+  font-size: 11px;
+  text-align: center;
+}
+.user-picker-anon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+/* ===== Submitter Badge (列表卡片 meta) ===== */
+.submitter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(var(--accent-rgb), 0.10);
+  padding: 1px 8px 1px 2px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--fg);
+}
+.submitter-badge img {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* ===== Withdraw Toast (60s 撤回浮窗) ===== */
+.withdraw-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 9999;
+}
+.withdraw-toast.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.withdraw-toast .withdraw-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.withdraw-toast .withdraw-btn:hover {
+  filter: brightness(1.1);
+}
