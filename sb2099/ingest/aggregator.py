@@ -1,7 +1,6 @@
-"""chat 事件聚合：raw_danmaku 入库 + live_noise_filters 过滤 + live_hot upsert。
+"""chat 事件聚合：只把 chat 事件写入 raw_danmaku。
 
-不在此处更新 send_cnt_24h/7d/unique_sender_cnt_*：那由 cron.recount_cron 每分钟
-重算（设计文档 §7 "增量 ++ + cron 校正"）。
+热词聚合（daily_hot upsert）移至 recount_cron，不再在此处进行。
 """
 from __future__ import annotations
 
@@ -10,11 +9,10 @@ import logging
 import unicodedata
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from .. import db as _db
-from ..models import LiveHot, RawDanmaku
+from ..models import RawDanmaku
 from ..normalize import normalize
 from ..settings import settings_cache
 
@@ -95,8 +93,6 @@ def _persist_sync(evt: dict) -> None:
     if not content_norm:
         return
 
-    is_noise = should_filter(content_norm)
-
     with _db.SessionLocal() as session:
         session.execute(
             sqlite_insert(RawDanmaku).values(
@@ -107,35 +103,6 @@ def _persist_sync(evt: dict) -> None:
                 content_norm=content_norm,
             )
         )
-
-        existing = session.execute(
-            select(LiveHot.id, LiveHot.send_cnt_total, LiveHot.is_filtered).where(
-                LiveHot.content_norm == content_norm
-            )
-        ).first()
-
-        if existing is None:
-            session.execute(
-                sqlite_insert(LiveHot).values(
-                    content_norm=content_norm,
-                    content_sample=content_raw,
-                    first_seen=ts,
-                    last_seen=ts,
-                    send_cnt_total=1,
-                    is_filtered=is_noise,
-                )
-            )
-        else:
-            session.execute(
-                update(LiveHot)
-                .where(LiveHot.id == existing.id)
-                .values(
-                    last_seen=ts,
-                    send_cnt_total=existing.send_cnt_total + 1,
-                    # 若新出现的 raw 不再命中规则但原行被标记，保持原状；规则改后由后台触发全量重扫
-                    is_filtered=existing.is_filtered or is_noise,
-                )
-            )
         session.commit()
 
 

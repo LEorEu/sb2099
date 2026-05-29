@@ -1,13 +1,10 @@
-"""aggregator: raw_danmaku 入库 + live_hot upsert + 噪音过滤。"""
+"""aggregator: 只把 chat 事件写入 raw_danmaku（不再聚合 live_hot）。"""
 from __future__ import annotations
 
-import json
-from datetime import datetime
-
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from sb2099.ingest.aggregator import _persist_sync
-from sb2099.models import LiveHot, RawDanmaku, Setting
+from sb2099.models import RawDanmaku
 
 
 def _evt(content: str, uid: str = "u1", ts_ms: int = 1779530000000) -> dict:
@@ -22,154 +19,35 @@ def _evt(content: str, uid: str = "u1", ts_ms: int = 1779530000000) -> dict:
     }
 
 
-def test_first_chat_creates_live_hot(tmp_db):
+def test_chat_inserts_raw(tmp_db):
     from sb2099.db import SessionLocal
     _persist_sync(_evt("打 rl"))
     with SessionLocal() as s:
-        assert s.execute(select(RawDanmaku)).scalars().all()
-        rows = s.execute(select(LiveHot)).scalars().all()
+        rows = s.execute(select(RawDanmaku)).scalars().all()
         assert len(rows) == 1
-        r = rows[0]
-        assert r.content_sample == "打 rl"
-        assert r.send_cnt_total == 1
-        assert r.is_filtered is False
+        assert rows[0].content_raw == "打 rl"
+        assert rows[0].uid == "u1"
 
 
-def test_repeat_increments_total(tmp_db):
+def test_repeat_inserts_multiple_raw(tmp_db):
     from sb2099.db import SessionLocal
     for i in range(5):
         _persist_sync(_evt("加一", uid=f"u{i}", ts_ms=1779530000000 + i * 1000))
     with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 1
-        assert rows[0].send_cnt_total == 5
-        # raw_danmaku 5 行
         assert len(s.execute(select(RawDanmaku)).scalars().all()) == 5
 
 
-def test_normalized_dedup(tmp_db):
-    """全角字母 / 零宽 → 应当合并到同一条 live_hot。"""
+def test_normalized_value_stored(tmp_db):
     from sb2099.db import SessionLocal
     _persist_sync(_evt("打ｒｌ"))
-    _persist_sync(_evt("打​rl", uid="u2", ts_ms=1779530001000))
     with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 1
-        assert rows[0].send_cnt_total == 2
-
-
-def test_noise_filter_marks_is_filtered(tmp_db):
-    """命中 live_noise_filters(整句精确匹配) → live_hot 行 is_filtered=1。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    # DEFAULTS 已含 "+1";整句精确匹配,只有正文等于 "+1" 才命中
-    settings_cache.invalidate()
-    _persist_sync(_evt("+1"))
-    with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 1
-        assert rows[0].is_filtered is True
-
-
-def test_noise_filter_substring_no_longer_hits(tmp_db):
-    """精确匹配语义:含子串但不等于关键词,不再被标 is_filtered。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    # "晚安宝贝" 长度 4 包含 letter,不会被低质量过滤;不等于 "晚安" 所以也不会被精确 noise
-    _persist_sync(_evt("晚安宝贝"))
-    with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 1
-        assert rows[0].is_filtered is False
-
-
-def test_noise_filter_runtime_update(tmp_db):
-    """改 setting 后 invalidate → 新规则立刻生效(整句精确)。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    # 第一条不命中默认规则
-    _persist_sync(_evt("奇怪的内容ABC"))
-    with SessionLocal() as s:
-        first = s.execute(select(LiveHot)).scalar_one()
-        assert first.is_filtered is False
-
-        s.execute(
-            update(Setting)
-            .where(Setting.key == "live_noise_filters")
-            .values(value=json.dumps(["奇怪的内容ABC"]), updated_at=datetime.utcnow())
-        )
-        s.commit()
-
-    settings_cache.invalidate()
-    _persist_sync(_evt("奇怪的内容ABC", uid="u2", ts_ms=1779530002000))
-    with SessionLocal() as s:
-        row = s.execute(select(LiveHot)).scalar_one()
-        # 一旦命中过 noise,is_filtered 保持 1
-        assert row.send_cnt_total == 2
-        assert row.is_filtered is True
-
-
-def test_low_quality_short_marked_filtered(tmp_db):
-    """单字符弹幕 → is_filtered=1(min_length=2 默认)。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    _persist_sync(_evt("？"))  # normalize → "?",长度 1
-    with SessionLocal() as s:
-        row = s.execute(select(LiveHot)).scalar_one()
-        assert row.is_filtered is True
-
-
-def test_decorated_noise_marked_filtered(tmp_db):
-    """noise 关键词被符号/重复装饰的变体也命中(晚安!!!、晚安~晚安~、晚安晚安晚安)。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    for i, c in enumerate(["晚安晚安晚安", "晚安!!!", "晚安~晚安~"]):
-        _persist_sync(_evt(c, uid=f"u{i}", ts_ms=1779530000000 + i * 1000))
-    with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 3
-        assert all(r.is_filtered for r in rows)
-
-
-def test_decorated_noise_skips_good_meme(tmp_db):
-    """noise 关键词字符出现但还有其他字母(好梗) → 不命中。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    _persist_sync(_evt("晚安宝贝"))
-    with SessionLocal() as s:
-        row = s.execute(select(LiveHot)).scalar_one()
-        assert row.is_filtered is False
-
-
-def test_low_quality_no_letter_marked_filtered(tmp_db):
-    """纯数字 / 纯符号 emoji → is_filtered=1。"""
-    from sb2099.db import SessionLocal
-    from sb2099.settings import settings_cache
-
-    settings_cache.invalidate()
-    _persist_sync(_evt("8888"))
-    _persist_sync(_evt("：）", uid="u2", ts_ms=1779530001000))
-    with SessionLocal() as s:
-        rows = s.execute(select(LiveHot)).scalars().all()
-        assert len(rows) == 2
-        assert all(r.is_filtered for r in rows)
+        row = s.execute(select(RawDanmaku)).scalar_one()
+        assert row.content_norm == "打rl"
 
 
 def test_empty_content_dropped(tmp_db):
     from sb2099.db import SessionLocal
     _persist_sync(_evt(""))
-    _persist_sync(_evt("   "))  # 归一化后为空
+    _persist_sync(_evt("   "))
     with SessionLocal() as s:
-        assert s.execute(select(LiveHot)).scalars().all() == []
         assert s.execute(select(RawDanmaku)).scalars().all() == []
