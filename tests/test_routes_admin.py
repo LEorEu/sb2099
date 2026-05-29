@@ -158,6 +158,26 @@ def test_tags_create_update_delete(admin_client):
         assert s.get(Tag, "08") is None
 
 
+def test_tags_page_renders_pending_section(admin_client):
+    """有候选 tag 时 /admin/tags 页面应渲染"观众提议待审"区块。"""
+    from datetime import datetime
+    from sb2099.models import Barrage
+    with _db.SessionLocal() as s:
+        b = Barrage(content="t", content_norm="t", tags="00", source="user",
+                    submit_time=datetime.utcnow(), status="active")
+        s.add(b)
+        s.commit()
+        bid = b.id
+    r = admin_client.post(f"/api/barrage/{bid}/propose-tag",
+                          json={"value": "abc", "label": "新分类"})
+    assert r.status_code == 201
+    r = admin_client.get("/admin/tags")
+    assert r.status_code == 200
+    assert "观众提议待审" in r.text
+    assert "abc" in r.text
+    assert "新分类" in r.text
+
+
 def test_tags_create_bad_value_rejected(admin_client):
     r = admin_client.post(
         "/admin/tags",

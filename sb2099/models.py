@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -96,6 +96,42 @@ class Tag(Base):
     icon_url: Mapped[str | None] = mapped_column(Text)
     sort: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    proposer_uid: Mapped[str | None] = mapped_column(Text)
+    proposer_ip_hash: Mapped[str | None] = mapped_column(String(32))
+    proposed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class BarrageTagVote(Base):
+    """观众给 barrage 投 tag 票。
+
+    PK = (barrage_id, tag_value, voter_uid OR voter_ip_hash) — 通过两个 partial
+    unique index 实现，避免 SQLite 在 NULL 上 unique 失效。tag 必须存在于 Tag 表，
+    但 Tag.enabled=False 时投票照收，等 admin 审核通过后回溯结算。
+    """
+
+    __tablename__ = "barrage_tag_vote"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    barrage_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tag_value: Mapped[str] = mapped_column(String(8), nullable=False)
+    voter_uid: Mapped[str | None] = mapped_column(Text)
+    voter_ip_hash: Mapped[str] = mapped_column(String(32), nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "uq_vote_uid",
+            "barrage_id", "tag_value", "voter_uid",
+            unique=True,
+            sqlite_where=text("voter_uid IS NOT NULL"),
+        ),
+        Index(
+            "uq_vote_ip",
+            "barrage_id", "tag_value", "voter_ip_hash",
+            unique=True,
+            sqlite_where=text("voter_uid IS NULL"),
+        ),
+        Index("ix_vote_barrage_tag", "barrage_id", "tag_value"),
+    )
 
 
 class BarrageReport(Base):

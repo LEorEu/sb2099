@@ -16,7 +16,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, desc, func, select, text, update
 
 from .. import db as _db
-from ..models import Barrage, BarrageReport, DailyHot, RawDanmaku, Setting, Tag, User
+from ..models import Barrage, BarrageReport, BarrageTagVote, DailyHot, RawDanmaku, Setting, Tag, User
+from ..tag_voting import settle_all_for_tag, vote_threshold
 from ..settings import settings_cache
 from ..users import avatar_url
 from ._filters import register_filters
@@ -310,12 +311,46 @@ def tags_page(
     _redirect_or_401(request, sb2099_admin)
     with _db.SessionLocal() as s:
         rows = s.execute(
-            select(Tag.value, Tag.label, Tag.icon_url, Tag.sort, Tag.enabled).order_by(Tag.sort)
+            select(
+                Tag.value, Tag.label, Tag.icon_url, Tag.sort, Tag.enabled,
+                Tag.proposer_uid, Tag.proposed_at,
+            ).order_by(Tag.enabled.desc(), Tag.sort, Tag.proposed_at)
         ).all()
+        # 候选 tag（enabled=False）需要显示已积票数 + 关联 barrage 数
+        pending_stats: dict[str, dict[str, int]] = {}
+        for r in rows:
+            if r.enabled:
+                continue
+            stat_row = s.execute(
+                text(
+                    "SELECT COUNT(DISTINCT barrage_id) AS bcnt, "
+                    "       COUNT(*) AS vcnt "
+                    "FROM barrage_tag_vote WHERE tag_value=:t"
+                ),
+                {"t": r.value},
+            ).mappings().one()
+            pending_stats[r.value] = {
+                "barrage_count": int(stat_row["bcnt"] or 0),
+                "vote_count": int(stat_row["vcnt"] or 0),
+            }
+        # proposer 昵称回填（如果 uid 在 user 表里）
+        proposer_uids = [r.proposer_uid for r in rows if r.proposer_uid]
+        proposer_nicks: dict[str, str] = {}
+        if proposer_uids:
+            for u, n in s.execute(
+                select(User.uid, User.nickname).where(User.uid.in_(proposer_uids))
+            ).all():
+                if n:
+                    proposer_nicks[u] = n
     return templates.TemplateResponse(
         request=request,
         name="admin/tags.html",
-        context={"tags": rows},
+        context={
+            "tags": rows,
+            "pending_stats": pending_stats,
+            "proposer_nicks": proposer_nicks,
+            "vote_threshold": vote_threshold(),
+        },
     )
 
 
@@ -373,8 +408,29 @@ def tags_delete(
         row = s.get(Tag, value)
         if not row:
             raise HTTPException(status_code=404, detail="tag not found")
+        # 同时清掉所有针对该 tag 的投票，避免成为孤儿
+        s.execute(delete(BarrageTagVote).where(BarrageTagVote.tag_value == value))
         s.delete(row)
         s.commit()
+    return RedirectResponse(url="/admin/tags", status_code=303)
+
+
+@router.post("/tags/{value}/approve")
+def tags_approve(
+    request: Request,
+    value: str = PathParam(...),
+    sb2099_admin: str | None = Cookie(default=None),
+):
+    """批准候选 tag：enabled=False → True，并对已有投票回溯结算。"""
+    _redirect_or_401(request, sb2099_admin)
+    with _db.SessionLocal() as s:
+        row = s.get(Tag, value)
+        if not row:
+            raise HTTPException(status_code=404, detail="tag not found")
+        if not row.enabled:
+            row.enabled = True
+            settle_all_for_tag(s, value)
+            s.commit()
     return RedirectResponse(url="/admin/tags", status_code=303)
 
 

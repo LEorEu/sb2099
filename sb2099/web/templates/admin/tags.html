@@ -18,11 +18,67 @@
   </form>
 </section>
 
+{% set pending_tags = tags | selectattr('proposed_at') | selectattr('enabled', 'equalto', false) | list %}
+{% if pending_tags %}
+<!-- 观众提议待审 -->
+<div class="glass-card animate-fade" style="padding: 24px; animation-delay: 0.05s; border: 1px solid rgba(255,200,80,0.35);">
+  <h3 style="font-family: var(--font-display); font-size: 16px; font-weight:600; margin-bottom: 8px; color:#ffc850;">
+    观众提议待审 ({{ pending_tags | length }})
+    <span style="font-size: 12px; font-weight: normal; color: var(--fg-subtle); margin-left: 8px;">达 {{ vote_threshold }} 票自动生效</span>
+  </h3>
+  <div class="admin-table-container" style="margin-bottom: 0;">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th style="width: 12%;">标签值</th>
+          <th style="width: 22%;">显示名称</th>
+          <th style="width: 25%;">提议人</th>
+          <th style="width: 13%;">关联条目</th>
+          <th style="width: 13%;">已投票</th>
+          <th style="width: 15%;">操作栏</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in pending_tags %}
+        <tr>
+          <td style="font-family: var(--font-mono); font-size:12px; vertical-align: middle; color:var(--accent);">{{ t.value }}</td>
+          <td style="vertical-align: middle;">{{ t.label }}</td>
+          <td style="vertical-align: middle; font-size: 12px; color: var(--fg-subtle);">
+            {% if t.proposer_uid %}
+              {{ proposer_nicks.get(t.proposer_uid, t.proposer_uid) }}
+            {% else %}
+              <span style="opacity: 0.6;">匿名</span>
+            {% endif %}
+            {% if t.proposed_at %}
+              <br><span style="font-size: 10px;">{{ t.proposed_at.strftime('%m-%d %H:%M') if t.proposed_at.strftime else t.proposed_at }}</span>
+            {% endif %}
+          </td>
+          <td style="vertical-align: middle;">{{ pending_stats.get(t.value, {}).get('barrage_count', 0) }} 条</td>
+          <td style="vertical-align: middle;">{{ pending_stats.get(t.value, {}).get('vote_count', 0) }} 票</td>
+          <td style="vertical-align: middle;">
+            <div style="display: flex; gap: 4px;">
+              <form method="post" action="/admin/tags/{{ t.value }}/approve" style="display:inline;">
+                <button type="submit" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">批准</button>
+              </form>
+              <form method="post" action="/admin/tags/{{ t.value }}/delete" onsubmit="return confirm('拒绝并删除候选 tag「{{ t.value }}」？关联投票一并清掉。')" style="display:inline;">
+                <button type="submit" class="btn btn-secondary danger" style="padding: 4px 10px; font-size: 11px;">拒绝</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% set enabled_tags = tags | rejectattr('proposed_at') | list + tags | selectattr('proposed_at') | selectattr('enabled', 'equalto', true) | list %}
 <!-- Glass Table: List & Edit Tags -->
 <div class="glass-card animate-fade" style="padding: 24px; animation-delay: 0.1s;">
   <h3 style="font-family: var(--font-display); font-size: 16px; font-weight:600; margin-bottom: 16px; color:#fff;">已有标签列表及修改</h3>
   
-  {% if tags %}
+  {% if enabled_tags %}
     <div class="admin-table-container" style="margin-bottom: 0;">
       <table class="admin-table">
         <thead>
@@ -36,7 +92,7 @@
           </tr>
         </thead>
         <tbody>
-        {% for t in tags %}
+        {% for t in enabled_tags %}
           <tr>
             <!-- Update form wrapper. In HTML5, we wrap tds or use form attribute, but existing template structures are inside tr. We preserve SQLAlchemy bind mappings exactly. -->
             <td style="font-family: var(--font-mono); font-size:12px; vertical-align: middle; color:var(--accent);">{{ t.value }}</td>

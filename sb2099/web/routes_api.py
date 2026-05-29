@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import time
 from datetime import datetime
 from typing import Literal
@@ -15,12 +16,13 @@ from sqlalchemy.exc import IntegrityError
 from .. import __version__ as sb_version
 from .. import db as _db
 from ..config import get_settings
-from ..models import Barrage, BarrageReport, DailyHot, Tag, User
+from ..models import Barrage, BarrageReport, BarrageTagVote, DailyHot, Tag, User
 from ..normalize import normalize
 from ..ratelimit import extract_ip, ip_hash, limiter, rate_for
 from ..search import search_barrage
 from ..settings import settings_cache
 from ..submission import evaluate, review_uid
+from ..tag_voting import settle_tag, vote_count, vote_threshold
 
 router = APIRouter(prefix="/api")
 
@@ -536,6 +538,176 @@ def promote(request: Request, response: Response, body: PromoteIn) -> dict:
             raise HTTPException(status_code=409, detail="duplicate (race)")
         _set_recent_cookie(response, new.id, ip_h)
         return {"data": _barrage_to_dict(new)}
+
+
+_TAG_VALUE_RE = re.compile(r"^[0-9A-Za-z]{1,8}$")
+
+
+class VoteTagIn(BaseModel):
+    tag_value: str
+    voter_uid: str | None = None
+
+    @field_validator("tag_value")
+    @classmethod
+    def _v(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not _TAG_VALUE_RE.match(v):
+            raise ValueError("tag_value must be 1-8 alphanumeric chars")
+        return v
+
+    @field_validator("voter_uid")
+    @classmethod
+    def _u(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
+
+@router.post("/barrage/{barrage_id}/vote-tag")
+@limiter.limit(lambda: rate_for("ratelimit_vote_per_hour_per_ip", 60))
+def vote_tag(barrage_id: int, request: Request, body: VoteTagIn) -> dict:
+    """观众给已发布的 barrage 投 tag 票。
+
+    - tag 必须已在 Tag 表（不限 enabled）；不存在 → 404 提示需走 propose-tag
+    - 投票即时记账（PK 冲突静默 = 幂等），返回当前票数 / 阈值
+    - tag.enabled=True 时立即结算 → applied 表示这一票推过阈值
+    - tag.enabled=False 时计票不结算（admin 审核通过会回溯）
+    """
+    with _db.SessionLocal() as s:
+        b = s.execute(
+            select(Barrage).where(Barrage.id == barrage_id, Barrage.status == "active")
+        ).scalar_one_or_none()
+        if b is None:
+            raise HTTPException(status_code=404, detail="barrage not found")
+        tag = s.execute(select(Tag).where(Tag.value == body.tag_value)).scalar_one_or_none()
+        if tag is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"message": "tag not found", "hint": "use /api/barrage/{id}/propose-tag"},
+            )
+        ip_h = ip_hash(extract_ip(request))
+        resolved_uid = _resolve_submitter_uid(s, body.voter_uid)
+        vote = BarrageTagVote(
+            barrage_id=barrage_id,
+            tag_value=body.tag_value,
+            voter_uid=resolved_uid,
+            voter_ip_hash=ip_h,
+            ts=datetime.utcnow(),
+        )
+        s.add(vote)
+        try:
+            s.commit()
+        except IntegrityError:
+            s.rollback()  # 重复投票，幂等
+        applied = False
+        if tag.enabled:
+            if settle_tag(s, barrage_id, body.tag_value):
+                s.commit()
+                applied = True
+        count = vote_count(s, barrage_id, body.tag_value)
+        return {
+            "data": {
+                "tag": body.tag_value,
+                "count": count,
+                "threshold": vote_threshold(),
+                "applied": applied,
+                "pending_approval": not tag.enabled,
+            }
+        }
+
+
+class ProposeTagIn(BaseModel):
+    value: str = Field(min_length=1, max_length=8)
+    label: str = Field(min_length=1, max_length=32)
+    voter_uid: str | None = None
+
+    @field_validator("value")
+    @classmethod
+    def _v(cls, v: str) -> str:
+        v = v.strip()
+        if not _TAG_VALUE_RE.match(v):
+            raise ValueError("value must be 1-8 alphanumeric chars")
+        return v
+
+    @field_validator("label")
+    @classmethod
+    def _l(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("label required")
+        return v
+
+    @field_validator("voter_uid")
+    @classmethod
+    def _u(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
+
+@router.post("/barrage/{barrage_id}/propose-tag", status_code=201)
+@limiter.limit(lambda: rate_for("ratelimit_propose_per_hour_per_ip", 10))
+def propose_tag(barrage_id: int, request: Request, body: ProposeTagIn) -> dict:
+    """提议新 tag 并自动给当前 barrage 投一票。
+
+    - value 已存在且 enabled=True → 409（直接走 vote-tag）
+    - value 已存在且 enabled=False → 复用现有候选，给 barrage 投一票即可
+    - value 不存在 → 创建 Tag(enabled=False) + 给 barrage 投一票
+    """
+    with _db.SessionLocal() as s:
+        b = s.execute(
+            select(Barrage).where(Barrage.id == barrage_id, Barrage.status == "active")
+        ).scalar_one_or_none()
+        if b is None:
+            raise HTTPException(status_code=404, detail="barrage not found")
+        ip_h = ip_hash(extract_ip(request))
+        resolved_uid = _resolve_submitter_uid(s, body.voter_uid)
+        existing = s.execute(select(Tag).where(Tag.value == body.value)).scalar_one_or_none()
+        if existing is not None and existing.enabled:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "tag already enabled", "hint": "use /api/barrage/{id}/vote-tag"},
+            )
+        if existing is None:
+            s.add(
+                Tag(
+                    value=body.value,
+                    label=body.label,
+                    icon_url=None,
+                    sort=999,
+                    enabled=False,
+                    proposer_uid=resolved_uid,
+                    proposer_ip_hash=ip_h,
+                    proposed_at=datetime.utcnow(),
+                )
+            )
+            s.commit()
+        # 给 proposer 投一票（pending tag 计票不结算）
+        s.add(
+            BarrageTagVote(
+                barrage_id=barrage_id,
+                tag_value=body.value,
+                voter_uid=resolved_uid,
+                voter_ip_hash=ip_h,
+                ts=datetime.utcnow(),
+            )
+        )
+        try:
+            s.commit()
+        except IntegrityError:
+            s.rollback()
+        count = vote_count(s, barrage_id, body.value)
+        return {
+            "data": {
+                "tag": body.value,
+                "label": body.label,
+                "count": count,
+                "threshold": vote_threshold(),
+                "pending_approval": True,
+            }
+        }
 
 
 @router.delete("/submission/{barrage_id}/withdraw")

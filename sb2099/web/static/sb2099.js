@@ -5,6 +5,27 @@
   'use strict';
 
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1';
+  const STORAGE_KEY_VOTER = 'sb2099_voter_v1';
+
+  // ---- Voter (持久化身份) ----
+  // 在 user-picker 里选了斗鱼 UID 后，本地存 {uid, nickname, avatar}，
+  // 投稿表单 / 标签投票 / 标签提议 都共用。后端会再 validate uid 是否存在。
+  function loadVoter() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_VOTER);
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      if (v && typeof v.uid === 'string') return v;
+    } catch (_) {}
+    return null;
+  }
+  function saveVoter(uid, nickname, avatar) {
+    if (!uid) return;
+    localStorage.setItem(STORAGE_KEY_VOTER, JSON.stringify({ uid, nickname, avatar }));
+  }
+  function clearVoter() {
+    localStorage.removeItem(STORAGE_KEY_VOTER);
+  }
 
   // ---- Toast System ----
   function toast(msg, ok) {
@@ -100,6 +121,13 @@
       searchBox.hidden = true;
       resultsEl.innerHTML = '';
       searchInput.value = '';
+      saveVoter(uid, nickname, avatar);
+    }
+
+    // 初始化时若 hidden 为空且 localStorage 有 voter，自动恢复（用户上次选过）
+    if (!hidden.value) {
+      const v = loadVoter();
+      if (v && v.uid) pickUser(v.uid, v.nickname, v.avatar);
     }
 
     chipClear.addEventListener('click', (e) => {
@@ -542,6 +570,162 @@
         toast('提升入库失败，请稍后重试', false);
       }
     }
+  });
+
+  // ---- Tag Voting Popover ----
+  // 列表页 / 详情页每条 barrage 卡片上的 "+ 标签" 按钮触发。
+  // 弹层结构延迟创建，全页面共用一个；切 barrage 时重置内容。
+  let _tagPopover = null;
+  let _availableTagsCache = null;
+  async function getAvailableTags() {
+    if (_availableTagsCache) return _availableTagsCache;
+    try {
+      const r = await getJSON('/api/tags');
+      _availableTagsCache = r.data || [];
+      return _availableTagsCache;
+    } catch (_) {
+      return [];
+    }
+  }
+  function ensureTagPopover() {
+    if (_tagPopover) return _tagPopover;
+    const wrap = document.createElement('div');
+    wrap.className = 'tag-vote-popover';
+    wrap.hidden = true;
+    wrap.innerHTML = `
+      <div class="tag-vote-backdrop"></div>
+      <div class="tag-vote-panel">
+        <div class="tag-vote-head">
+          <span class="tag-vote-title">给这条投稿加标签</span>
+          <button type="button" class="tag-vote-close" aria-label="关闭">×</button>
+        </div>
+        <div class="tag-vote-body">
+          <div class="tag-vote-section">
+            <div class="tag-vote-section-title">现有标签</div>
+            <div class="tag-vote-chips"></div>
+          </div>
+          <div class="tag-vote-section">
+            <div class="tag-vote-section-title">申请新标签 <span class="tag-vote-hint">（提交后等管理员审核）</span></div>
+            <div class="tag-vote-propose">
+              <input type="text" class="tag-vote-value" placeholder="标签值 (1-8 字母数字)" maxlength="8" pattern="[0-9A-Za-z]{1,8}">
+              <input type="text" class="tag-vote-label" placeholder="显示名称 (1-32 字)" maxlength="32">
+              <button type="button" class="btn tag-vote-propose-btn">提交申请</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+    wrap.querySelector('.tag-vote-backdrop').addEventListener('click', () => closeTagPopover());
+    wrap.querySelector('.tag-vote-close').addEventListener('click', () => closeTagPopover());
+    _tagPopover = wrap;
+    return wrap;
+  }
+  function closeTagPopover() {
+    if (_tagPopover) _tagPopover.hidden = true;
+  }
+  async function openTagPopover(barrageId, existingTagsCsv) {
+    const pop = ensureTagPopover();
+    pop.dataset.barrageId = String(barrageId);
+    pop.hidden = false;
+    const chipsEl = pop.querySelector('.tag-vote-chips');
+    chipsEl.innerHTML = '<span class="tag-vote-empty">加载中…</span>';
+    const [tags] = await Promise.all([getAvailableTags()]);
+    const existing = new Set((existingTagsCsv || '').split(',').filter(Boolean));
+    chipsEl.innerHTML = '';
+    if (!tags.length) {
+      chipsEl.innerHTML = '<span class="tag-vote-empty">还没有可投票的标签</span>';
+    }
+    tags.forEach(t => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'tag-vote-chip';
+      chip.dataset.tagValue = t.value;
+      if (existing.has(t.value)) {
+        chip.classList.add('already');
+        chip.disabled = true;
+        chip.innerHTML = `${escapeHtml(t.label)} <span class="tag-vote-mark">已有</span>`;
+      } else {
+        chip.innerHTML = escapeHtml(t.label);
+      }
+      chipsEl.appendChild(chip);
+    });
+    // 投票按钮事件（chip click）
+    chipsEl.onclick = async (e) => {
+      const chip = e.target.closest('.tag-vote-chip');
+      if (!chip || chip.disabled) return;
+      const tag_value = chip.dataset.tagValue;
+      chip.disabled = true;
+      const r = await postJSON(`/api/barrage/${barrageId}/vote-tag`, {
+        tag_value,
+        voter_uid: (loadVoter() || {}).uid || null,
+      });
+      if (r.ok) {
+        const d = r.data?.data || {};
+        if (d.applied) {
+          chip.classList.add('already');
+          chip.innerHTML = `${chip.textContent.trim()} <span class="tag-vote-mark">✓ 已添加</span>`;
+          toast(`标签「${tag_value}」已正式加到这条上`, true);
+          setTimeout(() => location.reload(), 800);
+        } else {
+          chip.classList.add('voted');
+          chip.innerHTML = `${chip.textContent.trim()} <span class="tag-vote-mark">${d.count}/${d.threshold}</span>`;
+          toast(`已投，当前 ${d.count}/${d.threshold} 票`, true);
+        }
+      } else if (r.status === 429) {
+        chip.disabled = false;
+        toast('投票过于频繁，请稍后', false);
+      } else {
+        chip.disabled = false;
+        toast('投票失败', false);
+      }
+    };
+    // 申请新标签
+    const proposeBtn = pop.querySelector('.tag-vote-propose-btn');
+    const valueInput = pop.querySelector('.tag-vote-value');
+    const labelInput = pop.querySelector('.tag-vote-label');
+    valueInput.value = '';
+    labelInput.value = '';
+    proposeBtn.onclick = async () => {
+      const value = (valueInput.value || '').trim();
+      const label = (labelInput.value || '').trim();
+      if (!/^[0-9A-Za-z]{1,8}$/.test(value)) {
+        toast('标签值必须为 1-8 位字母或数字', false);
+        return;
+      }
+      if (!label) { toast('请填写显示名称', false); return; }
+      proposeBtn.disabled = true;
+      const r = await postJSON(`/api/barrage/${barrageId}/propose-tag`, {
+        value, label,
+        voter_uid: (loadVoter() || {}).uid || null,
+      });
+      proposeBtn.disabled = false;
+      if (r.ok) {
+        toast('已提交，等管理员审核', true);
+        // 刷新可用 tag 列表（不强制 reload）
+        _availableTagsCache = null;
+        valueInput.value = '';
+        labelInput.value = '';
+      } else if (r.status === 409) {
+        toast('该标签已存在，请直接投票', false);
+      } else if (r.status === 429) {
+        toast('申请过于频繁，请稍后', false);
+      } else if (r.status === 422) {
+        toast('标签格式不合规', false);
+      } else {
+        toast('申请失败', false);
+      }
+    };
+  }
+
+  // 全局委托：listing 卡片上的 + 标签 按钮
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="vote-tag"]');
+    if (!btn) return;
+    e.preventDefault();
+    const barrageId = parseInt(btn.dataset.id, 10);
+    const tags = btn.dataset.tags || '';
+    if (barrageId) openTagPopover(barrageId, tags);
   });
 
   // ---- Page Init ----
