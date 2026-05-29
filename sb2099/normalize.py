@@ -8,16 +8,22 @@
 4. emoji 保留（不剥离）
 5. 繁简不统一
 6. 大小写不归一（"GG" 与 "gg" 视为不同）
-7. **重复段折叠**：若整串恰好等于某子串 p 的 n 次重复 (n>=2, len(p)>=2)，折叠为 p。
-   例：`宝宝你好可爱啊宝宝你好可爱啊` → `宝宝你好可爱啊`。仅当严格周期才折叠，
-   防止 `宝宝你好可爱啊Oᴗoಣ` 这种带尾缀的被误聚合。
+7. **尾缀剥除**（可选，传入 `suffixes`）：在重复段折叠之前，若串尾命中任一尾缀词
+   则剥掉，可连续剥多个；剥到只剩尾缀本身则停（保底不剥空）。用于 douyuex 等插件
+   给复制弹幕自动追加的自定义尾缀（如 `喵` / `Oᴗoಣ`），使去掉尾缀后内容相同的
+   弹幕聚合为同一 `content_norm`。尾缀词应由调用方先用 `normalize()`（不带尾缀）
+   规范化为规范形再传入。
+8. **重复段折叠**：若整串恰好等于某子串 p 的 n 次重复 (n>=2, len(p)>=2)，折叠为 p。
+   例：`宝宝你好可爱啊宝宝你好可爱啊` → `宝宝你好可爱啊`。仅当严格周期才折叠。
 
-纯函数，无外部依赖。改规则需同步修改头部 docstring 与单测契约。
+纯函数，无外部依赖（尾缀表由调用方从 setting 读出后传入）。改规则需同步修改
+头部 docstring 与单测契约。
 """
 from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 
 __all__ = ["normalize"]
 
@@ -66,7 +72,26 @@ def _collapse_repeat(s: str) -> str:
     return s
 
 
-def normalize(s: str) -> str:
+def _strip_suffixes(s: str, suffixes: Sequence[str]) -> str:
+    """连续剥除串尾命中的尾缀词;剥到只剩尾缀本身则停(保底不剥空)。
+
+    suffixes 应已是规范形(调用方用 normalize() 处理过)。剥除后顺手 rstrip
+    清掉尾缀前可能残留的空白。
+    """
+    if not suffixes:
+        return s
+    changed = True
+    while changed and s:
+        changed = False
+        for suf in suffixes:
+            if suf and s != suf and s.endswith(suf):
+                s = s[: -len(suf)].rstrip()
+                changed = True
+                break
+    return s
+
+
+def normalize(s: str, suffixes: Sequence[str] = ()) -> str:
     if not s:
         return ""
 
@@ -91,5 +116,8 @@ def normalize(s: str) -> str:
     # 3) 空白合并 + 首尾 strip（全角空格 U+3000 也算空白；re \s 已覆盖）
     collapsed = _WS_RE.sub(" ", half).strip()
 
-    # 4) 重复段折叠（必须在空白合并之后）
+    # 4) 尾缀剥除（在折叠之前：尾缀追加在重复内容之后，先剥才能还原周期）
+    collapsed = _strip_suffixes(collapsed, suffixes)
+
+    # 5) 重复段折叠（必须在空白合并与尾缀剥除之后）
     return _collapse_repeat(collapsed)

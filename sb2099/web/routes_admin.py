@@ -129,6 +129,15 @@ _SETTING_META: list[dict[str, object]] = [
         "hint": "每行一条;采用「整句精确匹配」,不会被子串误伤",
     },
     {
+        "key": "live_suffix_strips",
+        "label": "直播弹幕尾缀剥除",
+        "desc": "归一化时,若弹幕结尾命中其中任一条则剥掉(可连剥多个)。"
+                "用于 douyuex 等插件给复制弹幕自动追加的自定义尾缀,使去尾缀后相同的弹幕聚合为同一条。",
+        "kind": "lines",
+        "default": [],
+        "hint": "每行一条尾缀词,如 喵 / Oᴗoಣ;仅在「结尾」命中才剥,剥到只剩尾缀本身则停。改后需「重新聚合」让历史 raw 生效",
+    },
+    {
         "key": "submission_review_rules",
         "label": "投稿待审关键词",
         "desc": "投稿正文包含任一关键词时,先进入 pending 等管理员审核",
@@ -558,18 +567,20 @@ def live_hot_recompute(
     sb2099_admin: str | None = Cookie(default=None),
 ):
     """重新规范化所有 raw_danmaku.content_norm，然后触发一次 recount 重建当日 daily_hot。
-    用于 normalize 规则变更后（如重复段折叠）让历史 raw 的归一化对齐再重聚合。"""
+    用于 normalize 规则变更后（如重复段折叠、尾缀剥除）让历史 raw 的归一化对齐再重聚合。"""
     from ..normalize import normalize
+    from ..ingest.aggregator import normalized_suffix_strips
 
     _redirect_or_401(request, sb2099_admin)
     settings_cache.invalidate()
+    suffixes = normalized_suffix_strips()
     with _db.SessionLocal() as s:
         rows = s.execute(
             select(RawDanmaku.id, RawDanmaku.content_raw, RawDanmaku.content_norm)
         ).all()
         n_raw_updated = 0
         for rid, raw, old_norm in rows:
-            new_norm = normalize(raw or "")
+            new_norm = normalize(raw or "", suffixes=suffixes)
             if new_norm != old_norm:
                 s.execute(
                     update(RawDanmaku).where(RawDanmaku.id == rid).values(content_norm=new_norm)

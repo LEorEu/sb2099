@@ -53,6 +53,32 @@ def test_normalize_keeps_case_distinct():
 
 
 @pytest.mark.parametrize(
+    "raw, suffixes, expected",
+    [
+        # 不传 suffixes → 行为不变（带尾缀不剥、不折叠）
+        ("宝宝你好可爱啊Oᴗoಣ", (), "宝宝你好可爱啊Oᴗoಣ"),
+        # 传入对应尾缀 → 剥掉
+        ("宝宝你好可爱啊Oᴗoಣ", ("Oᴗoಣ",), "宝宝你好可爱啊"),
+        ("好好好喵", ("喵",), "好好好"),
+        # 剥尾缀后变成严格周期 → 再折叠
+        ("宝宝你好可爱啊宝宝你好可爱啊喵", ("喵",), "宝宝你好可爱啊"),
+        # 连续剥多个不同尾缀
+        ("内容Oᴗoಣ喵", ("喵", "Oᴗoಣ"), "内容"),
+        # 连续剥同一尾缀
+        ("内容喵喵", ("喵",), "内容"),
+        # 保底：整串就是尾缀本身 → 不剥空
+        ("喵", ("喵",), "喵"),
+        # 尾缀只在中间/开头 → 不动
+        ("喵好好", ("喵",), "喵好好"),
+        # 尾缀剥除前先做全/半角与零宽归一，仍能命中
+        ("好好好ｍ", ("m",), "好好好"),
+    ],
+)
+def test_normalize_strip_suffixes(raw: str, suffixes, expected: str) -> None:
+    assert normalize(raw, suffixes=suffixes) == expected
+
+
+@pytest.mark.parametrize(
     "raw, expected",
     [
         # 整串严格周期 → 折叠到最短 base

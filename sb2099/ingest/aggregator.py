@@ -18,7 +18,7 @@ from ..settings import settings_cache
 
 log = logging.getLogger(__name__)
 
-__all__ = ["persist_chat_event", "should_filter"]
+__all__ = ["persist_chat_event", "should_filter", "normalized_suffix_strips"]
 
 
 def _normalized_filters() -> list[str]:
@@ -28,6 +28,22 @@ def _normalized_filters() -> list[str]:
         n = normalize(kw)
         if n:
             out.append(n)
+    return out
+
+
+def normalized_suffix_strips() -> list[str]:
+    """从 setting 读 live_suffix_strips,规范化每条尾缀词,按长度降序返回。
+
+    供 ingest 入库与后台 recompute 计算 content_norm 时传给 normalize(),
+    使带 douyuex 自定义尾缀的复制弹幕聚合为同一条。长度降序保证先剥较长尾缀。
+    """
+    raw = settings_cache.get("live_suffix_strips", []) or []
+    out: list[str] = []
+    for kw in raw:
+        n = normalize(kw)
+        if n:
+            out.append(n)
+    out.sort(key=len, reverse=True)
     return out
 
 
@@ -89,7 +105,7 @@ def _persist_sync(evt: dict) -> None:
     content_raw = evt.get("content") or ""
     if not content_raw:
         return
-    content_norm = normalize(content_raw)
+    content_norm = normalize(content_raw, suffixes=normalized_suffix_strips())
     if not content_norm:
         return
 

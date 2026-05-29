@@ -43,6 +43,7 @@ DEFAULTS: dict[str, object] = {
     "live_hot_min_length": 2,
     "live_hot_max_length": 80,
     "live_noise_filters": ["晚安", "88888", "爆了", "+1"],
+    "live_suffix_strips": ["喵", "Oᴗoಣ"],
     "submission_review_rules": [],
     "barrage_min_length": 4,
     "barrage_max_length": 255,
