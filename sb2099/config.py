@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    SB2099_ADMIN_TOKEN: str = Field(..., min_length=16)
+    SB2099_ADMIN_TOKEN: str = Field(..., min_length=6)
     SB2099_IP_SALT: str = Field(..., min_length=8)
     DOUYU_LIVE_WS_URL: str = "ws://139.196.96.110:8080/ws/live"
     DOUYU_ROOM_ID: int = 12740109
