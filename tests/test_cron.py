@@ -78,16 +78,31 @@ def test_recount_skips_noise(tmp_db):
         assert s.execute(select(DailyHot)).scalars().all() == []
 
 
-def test_archive_removes_old_rows(tmp_db):
-    """raw_retention_days=30 默认；35 天前的 raw 应被清，30 天内保留。"""
+def test_archive_removes_old_raw_and_daily_hot(tmp_db):
+    """raw_retention_days=2（迁移后默认）：3 天前 raw 删、1 天前保留；
+    daily_hot_retention_days=7：8 天前的数据日行删、今天保留。"""
     from sb2099.db import SessionLocal
+    from sb2099.models import DailyHot
 
     now = datetime.utcnow().replace(microsecond=0)
-    _persist_sync(_evt("recent", "u1", now - timedelta(days=10)))
-    _persist_sync(_evt("old", "u2", now - timedelta(days=35)))
+    _persist_sync(_evt("recent", "u1", now - timedelta(days=1)))
+    _persist_sync(_evt("old", "u2", now - timedelta(days=3)))
+
+    today = now.date().isoformat()
+    old_date = (now.date() - timedelta(days=8)).isoformat()
+    with SessionLocal() as s:
+        s.add(DailyHot(live_date=today, content_norm="keep", content_sample="keep",
+                       send_cnt=5, unique_sender_cnt=5, first_seen=now, last_seen=now,
+                       page_copy_cnt=0, is_filtered=False))
+        s.add(DailyHot(live_date=old_date, content_norm="drop", content_sample="drop",
+                       send_cnt=5, unique_sender_cnt=5, first_seen=now, last_seen=now,
+                       page_copy_cnt=0, is_filtered=False))
+        s.commit()
 
     removed = _archive_sync()
-    assert removed == 1
+    assert removed == 1  # 只删了 3 天前那条 raw
     with SessionLocal() as s:
-        contents = [r.content_raw for r in s.execute(select(RawDanmaku)).scalars().all()]
-        assert contents == ["recent"]
+        raw_contents = [r.content_raw for r in s.execute(select(RawDanmaku)).scalars().all()]
+        assert raw_contents == ["recent"]
+        hot_dates = [d.live_date for d in s.execute(select(DailyHot)).scalars().all()]
+        assert hot_dates == [today]

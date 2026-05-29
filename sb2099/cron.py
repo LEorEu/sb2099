@@ -95,10 +95,19 @@ async def recount_loop() -> None:
 
 
 def _archive_sync() -> int:
-    days = int(settings_cache.get("raw_retention_days", 30) or 30)
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    raw_days = int(settings_cache.get("raw_retention_days", 2) or 2)
+    raw_cutoff = now - timedelta(days=raw_days)
+
+    hot_days = int(settings_cache.get("daily_hot_retention_days", 7) or 7)
+    live_date, _ = current_live_window(now)
+    hot_cutoff = (live_date - timedelta(days=hot_days)).isoformat()
+
     with _db.SessionLocal() as session:
-        res = session.execute(delete(RawDanmaku).where(RawDanmaku.ts < cutoff))
+        res = session.execute(delete(RawDanmaku).where(RawDanmaku.ts < raw_cutoff))
+        session.execute(
+            text("DELETE FROM daily_hot WHERE live_date < :c"), {"c": hot_cutoff}
+        )
         session.commit()
         return int(res.rowcount or 0)
 
