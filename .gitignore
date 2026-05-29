@@ -34,3 +34,10 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# 本地项目资料（保留在 docs/ 本地，不上传）；docs/superpowers/ 仍正常跟踪
+分析报告.md
+设计文档.md
+设计文档_new.md
+api.md
+sb6657-api-snapshot.md
