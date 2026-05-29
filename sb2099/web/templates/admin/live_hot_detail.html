@@ -14,7 +14,7 @@
   
   <div class="meta" style="margin-top: 16px;">
     <span>归一化哈希 (content_norm): <code style="font-family: var(--font-mono); color: var(--accent);">{{ hot.content_norm }}</code></span>
-    <span>累计发送数: {{ hot.send_cnt_total }} 次</span>
+    <span>当日发送数: {{ hot.send_cnt }} 次</span>
     <span>首次捕获: {{ hot.first_seen | cst_long }}</span>
     <span>最近捕获: {{ hot.last_seen | cst_long }}</span>
     <span>是否被过滤: {% if hot.is_filtered %}已过滤限制{% else %}公开正常{% endif %}</span>

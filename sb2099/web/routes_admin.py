@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, desc, func, select, text, update
 
 from .. import db as _db
-from ..models import Barrage, BarrageReport, LiveHot, RawDanmaku, Setting, Tag
+from ..models import Barrage, BarrageReport, DailyHot, RawDanmaku, Setting, Tag
 from ..settings import settings_cache
 from ._filters import register_filters
 from .admin_auth import COOKIE_MAX_AGE, COOKIE_NAME, require_admin, verify_token
@@ -510,10 +510,10 @@ def live_hot_page(
     _redirect_or_401(request, sb2099_admin)
     where = "is_filtered=1" if filtered else "1=1"
     sql = text(
-        f"SELECT id, content_sample, send_cnt_24h, send_cnt_total, "
-        "unique_sender_cnt_24h, last_seen, is_filtered "
-        f"FROM live_hot WHERE {where} "
-        "ORDER BY send_cnt_total DESC LIMIT 200"
+        "SELECT id, content_sample, send_cnt AS send_cnt_24h, send_cnt AS send_cnt_total, "
+        "unique_sender_cnt AS unique_sender_cnt_24h, last_seen, is_filtered "
+        f"FROM daily_hot WHERE {where} "
+        "ORDER BY live_date DESC, send_cnt DESC LIMIT 200"
     )
     with _db.SessionLocal() as s:
         rows = s.execute(sql).mappings().all()
@@ -532,7 +532,7 @@ def live_hot_detail(
 ) -> HTMLResponse:
     _redirect_or_401(request, sb2099_admin)
     with _db.SessionLocal() as s:
-        hot = s.get(LiveHot, live_hot_id)
+        hot = s.get(DailyHot, live_hot_id)
         if not hot:
             raise HTTPException(status_code=404, detail="live_hot not found")
         sql = text(
@@ -561,13 +561,11 @@ def live_hot_recompute(
     """重 normalize 所有 raw_danmaku → 重建 live_hot 聚合。
     用于规则变更(如重复折叠)后,把历史 N 个变体合并到一条 base。
     """
-    from ..ingest.aggregator import should_filter
     from ..normalize import normalize
 
     _redirect_or_401(request, sb2099_admin)
     settings_cache.invalidate()
     with _db.SessionLocal() as s:
-        # 1) 重 normalize 所有 raw_danmaku.content_norm
         rows = s.execute(
             select(RawDanmaku.id, RawDanmaku.content_raw, RawDanmaku.content_norm)
         ).all()
@@ -579,33 +577,11 @@ def live_hot_recompute(
                     update(RawDanmaku).where(RawDanmaku.id == rid).values(content_norm=new_norm)
                 )
                 n_raw_updated += 1
-        # 2) 清空 live_hot,从 raw 重新聚合
-        s.execute(text("DELETE FROM live_hot"))
-        s.execute(
-            text(
-                "INSERT INTO live_hot(content_norm, content_sample, first_seen, last_seen, "
-                "send_cnt_total, send_cnt_24h, send_cnt_7d, "
-                "unique_sender_cnt_24h, unique_sender_cnt_7d, is_filtered) "
-                "SELECT content_norm, "
-                "  (SELECT content_raw FROM raw_danmaku r2 WHERE r2.content_norm = r.content_norm "
-                "    ORDER BY LENGTH(r2.content_raw) ASC, ts DESC LIMIT 1), "
-                "  MIN(ts), MAX(ts), COUNT(*), 0, 0, 0, 0, 0 "
-                "FROM raw_danmaku r WHERE content_norm <> '' GROUP BY content_norm"
-            )
-        )
-        # 3) 重算 is_filtered
-        live_rows = s.execute(select(LiveHot.id, LiveHot.content_norm)).all()
-        n_filtered = 0
-        for hot_id, cn in live_rows:
-            if should_filter(cn):
-                s.execute(update(LiveHot).where(LiveHot.id == hot_id).values(is_filtered=True))
-                n_filtered += 1
         s.commit()
-    # 4) 触发一次 recount 把 24h/7d/unique 重算
     from ..cron import _recount_sync
     _recount_sync()
     return RedirectResponse(
-        url=f"/admin/live_hot?recompute_ok={n_raw_updated}_raw_renorm_{len(live_rows)}_aggregated_{n_filtered}_filtered",
+        url=f"/admin/live_hot?recompute_ok={n_raw_updated}_raw_renorm_rebuilt",
         status_code=303,
     )
 
@@ -618,25 +594,11 @@ def live_hot_rescan(
     """改完 live_noise_filters / live_hot_min_length 后调一次:
     扫所有 live_hot,按当前规则(整句精确匹配 + 长度/字符过滤)重算 is_filtered。
     """
-    from ..ingest.aggregator import should_filter
-
     _redirect_or_401(request, sb2099_admin)
     settings_cache.invalidate()
-    n_filtered = 0
-    n_unfiltered = 0
-    with _db.SessionLocal() as s:
-        rows = s.execute(select(LiveHot.id, LiveHot.content_norm)).all()
-        for hot_id, cn in rows:
-            hit = should_filter(cn)
-            s.execute(update(LiveHot).where(LiveHot.id == hot_id).values(is_filtered=hit))
-            if hit:
-                n_filtered += 1
-            else:
-                n_unfiltered += 1
-        s.commit()
-    return RedirectResponse(
-        url=f"/admin/live_hot?rescan_ok={n_filtered}_filtered_{n_unfiltered}_clear", status_code=303
-    )
+    from ..cron import _recount_sync
+    _recount_sync()
+    return RedirectResponse(url="/admin/live_hot?rescan_ok=recounted", status_code=303)
 
 
 # ---- stats ----------------------------------------------------------------
@@ -659,7 +621,7 @@ def stats_page(
             select(func.count(Barrage.id)).where(Barrage.submit_time >= h24)
         ).scalar_one()
         copy_24h = s.execute(select(func.sum(Barrage.cnt))).scalar() or 0
-        live_hot_total = s.execute(select(func.count(LiveHot.id))).scalar_one()
+        live_hot_total = s.execute(select(func.count(DailyHot.id))).scalar_one()
         pending_total = s.execute(
             select(func.count(Barrage.id)).where(Barrage.status == "pending")
         ).scalar_one()

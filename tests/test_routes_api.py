@@ -8,7 +8,34 @@ from fastapi.testclient import TestClient
 from sqlalchemy import insert, update
 
 from sb2099 import db as _db
-from sb2099.models import Barrage, LiveHot
+from sb2099.models import Barrage, DailyHot
+
+
+def _seed_daily(content_sample, content_norm=None, *, live_date=None,
+                send_cnt=10, unique=5, page_copy_cnt=0, is_filtered=False):
+    """在「当前数据日」种入一条 daily_hot，返回其 id。"""
+    from datetime import datetime, timezone
+    from sqlalchemy import insert as sa_insert, select as sa_select
+    from sb2099.db import SessionLocal
+    from sb2099.live_day import current_live_window
+    from sb2099.models import DailyHot
+    from sb2099.normalize import normalize
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    ld, _ = current_live_window(now)
+    cn = content_norm or normalize(content_sample)
+    with SessionLocal() as s:
+        s.execute(sa_insert(DailyHot).values(
+            live_date=(live_date or ld.isoformat()),
+            content_norm=cn, content_sample=content_sample,
+            send_cnt=send_cnt, unique_sender_cnt=unique,
+            first_seen=now, last_seen=now,
+            page_copy_cnt=page_copy_cnt, is_filtered=is_filtered,
+        ))
+        s.commit()
+        return s.execute(
+            sa_select(DailyHot.id).where(DailyHot.content_norm == cn)
+        ).scalars().first()
 
 
 @pytest.fixture
@@ -39,51 +66,39 @@ def test_live_empty(client):
 
 
 def test_live_day_filters_out_is_filtered_and_limits_to_10(client):
-    now = datetime.utcnow()
-    with _db.SessionLocal() as s:
-        for i in range(15):
-            s.execute(
-                insert(LiveHot).values(
-                    content_norm=f"cn{i}",
-                    content_sample=f"sample{i}",
-                    first_seen=now - timedelta(minutes=i),
-                    last_seen=now - timedelta(minutes=i),
-                    send_cnt_24h=100 - i,
-                    send_cnt_7d=100 - i,
-                    send_cnt_total=100 - i,
-                    unique_sender_cnt_24h=50 - i,
-                    is_filtered=(i == 0),  # 把 top1 标 filtered
-                )
-            )
-        s.commit()
+    for i in range(15):
+        _seed_daily(
+            f"sample{i}", content_norm=f"cn{i}",
+            send_cnt=100 - i, unique=50 - i,
+            is_filtered=(i == 0),  # 把 top1 标 filtered
+        )
 
     r = client.get("/api/live?window=day")
     data = r.json()["data"]
     assert len(data) == 10
     # is_filtered=1 的 cn0 应被排除
     assert all(d["content_sample"] != "sample0" for d in data)
-    # 按 send_cnt_24h desc 排序
+    # 按 send_cnt desc 排序
     assert data[0]["content_sample"] == "sample1"
     assert data[0]["send_cnt"] == 99
 
 
-def test_live_week_limit_50(client):
-    now = datetime.utcnow()
-    with _db.SessionLocal() as s:
-        for i in range(60):
-            s.execute(
-                insert(LiveHot).values(
-                    content_norm=f"x{i}",
-                    content_sample=f"x{i}",
-                    first_seen=now,
-                    last_seen=now,
-                    send_cnt_7d=100 - i,
-                    send_cnt_total=100,
-                )
-            )
-        s.commit()
+def test_live_week_aggregates_across_days(client):
+    from datetime import datetime, timezone
+    from sb2099.live_day import current_live_window
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    today, _ = current_live_window(now)
+    six_days_ago = (today - timedelta(days=6)).isoformat()
+
+    _seed_daily("今天的梗", content_norm="today_cn", send_cnt=10)
+    _seed_daily("六天前的梗", content_norm="old_cn", send_cnt=20, live_date=six_days_ago)
+
     r = client.get("/api/live?window=week")
-    assert len(r.json()["data"]) == 50
+    data = r.json()["data"]
+    samples = [d["content_sample"] for d in data]
+    assert "今天的梗" in samples
+    assert "六天前的梗" in samples
 
 
 def test_barrage_empty(client):
@@ -128,24 +143,7 @@ def test_userscript_version(client):
 
 
 def _seed_live_hot(content_sample="加一", content_norm=None):
-    from datetime import datetime
-    from sqlalchemy import insert as sa_insert
-    from sb2099.models import LiveHot
-
-    with _db.SessionLocal() as s:
-        res = s.execute(
-            sa_insert(LiveHot).values(
-                content_norm=content_norm or content_sample,
-                content_sample=content_sample,
-                first_seen=datetime.utcnow(),
-                last_seen=datetime.utcnow(),
-                send_cnt_24h=10,
-                send_cnt_total=10,
-                is_filtered=False,
-            )
-        )
-        s.commit()
-        return res.inserted_primary_key[0]
+    return _seed_daily(content_sample, content_norm, send_cnt=1, unique=5)
 
 
 def test_submit_barrage_active(client):
@@ -266,10 +264,10 @@ def test_copy_live_hot_increments(client):
     r = client.post("/api/copy", json={"source": "live_hot", "id": hid})
     assert r.status_code == 200
     from sqlalchemy import select as sa_select
-    from sb2099.models import LiveHot
+    from sb2099.models import DailyHot
     with _db.SessionLocal() as s:
         cnt = s.execute(
-            sa_select(LiveHot.page_copy_cnt).where(LiveHot.id == hid)
+            sa_select(DailyHot.page_copy_cnt).where(DailyHot.id == hid)
         ).scalar_one()
         assert cnt == 1
 

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import insert
 
 from sb2099 import db as _db
-from sb2099.models import Barrage, LiveHot
+from sb2099.models import Barrage, DailyHot
 
 
 @pytest.fixture
@@ -60,17 +60,21 @@ def test_live_page_empty(client):
 
 
 def test_live_page_with_data(client):
-    now = datetime.utcnow()
+    from datetime import timezone
+    from sb2099.live_day import current_live_window
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    live_date, _ = current_live_window(now)
     with _db.SessionLocal() as s:
         s.execute(
-            insert(LiveHot).values(
+            insert(DailyHot).values(
+                live_date=live_date.isoformat(),
                 content_norm="加一",
                 content_sample="加一",
                 first_seen=now - timedelta(hours=1),
                 last_seen=now,
-                send_cnt_24h=42,
-                unique_sender_cnt_24h=20,
-                send_cnt_total=42,
+                send_cnt=42,
+                unique_sender_cnt=20,
                 is_filtered=False,
             )
         )

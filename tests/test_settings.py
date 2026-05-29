@@ -15,7 +15,7 @@ def test_defaults_loaded(tmp_db):
     assert settings_cache.get("barrage_max_length") == 255
     assert settings_cache.get("live_noise_filters") == ["晚安", "88888", "爆了", "+1"]
     assert settings_cache.get("submission_review_rules") == []
-    assert settings_cache.get("raw_retention_days") == 30
+    assert settings_cache.get("raw_retention_days") == 2
 
 
 def test_invalidate_reloads(tmp_db):
