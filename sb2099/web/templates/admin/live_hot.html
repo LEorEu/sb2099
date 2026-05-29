@@ -41,9 +41,9 @@
           <tr>
             <th style="width: 7%;">ID</th>
             <th style="width: 40%;">弹幕正文样本</th>
-            <th style="width: 8%; white-space: nowrap;">24h 次数</th>
-            <th style="width: 8%; white-space: nowrap;">累计次数</th>
-            <th style="width: 10%; white-space: nowrap;">24h 唯一</th>
+            <th style="width: 12%; white-space: nowrap;">数据日</th>
+            <th style="width: 8%; white-space: nowrap;">当日次数</th>
+            <th style="width: 10%; white-space: nowrap;">当日唯一</th>
             <th style="width: 14%; white-space: nowrap;">最近捕获</th>
             <th style="width: 13%; white-space: nowrap;">是否被屏蔽</th>
           </tr>
@@ -53,9 +53,9 @@
           <tr class="{% if it.is_filtered %}promoted{% endif %}" style="{% if it.is_filtered %}border-left: 2px solid var(--error); background: hsla(354, 75%, 55%, 0.02);{% endif %}">
             <td style="font-family: var(--font-mono); font-size:12px; vertical-align: middle;"><a href="/admin/live_hot/{{ it.id }}" style="color: var(--accent); font-weight:600; text-decoration:none;">#{{ it.id }}</a></td>
             <td class="content" style="vertical-align: middle; font-weight: 500;">{{ it.content_sample }}</td>
-            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_24h }}</td>
-            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt_total }}</td>
-            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.unique_sender_cnt_24h }} 人</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono); font-size:11px;">{{ it.live_date }}</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.send_cnt }}</td>
+            <td style="vertical-align: middle; font-family: var(--font-mono);">{{ it.unique_sender_cnt }} 人</td>
             <td style="vertical-align: middle; font-size:11px; color: var(--fg-subtle);">{{ it.last_seen | cst_long }}</td>
             <td style="vertical-align: middle; white-space: nowrap;">
               {% if it.is_filtered %}

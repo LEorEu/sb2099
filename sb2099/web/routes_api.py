@@ -259,6 +259,7 @@ def copy_one(request: Request, body: CopyIn) -> dict:
             if res.rowcount == 0:
                 raise HTTPException(status_code=404, detail="barrage not found")
             return {"data": {"source": "barrage", "id": body.id}}
+        # 公开 API 合约：source/字段名沿用 "live_hot"，底层实为 daily_hot
         else:
             res = s.execute(
                 update(DailyHot)
@@ -315,6 +316,7 @@ def promote(request: Request, body: PromoteIn) -> dict:
         raise HTTPException(status_code=400, detail=f"unknown tags: {invalid}")
 
     with _db.SessionLocal() as s:
+        # 公开 API 合约：source/字段名沿用 "live_hot"，底层实为 daily_hot
         hot = s.execute(
             select(DailyHot).where(DailyHot.id == body.live_hot_id)
         ).scalar_one_or_none()

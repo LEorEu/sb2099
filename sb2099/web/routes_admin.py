@@ -510,8 +510,7 @@ def live_hot_page(
     _redirect_or_401(request, sb2099_admin)
     where = "is_filtered=1" if filtered else "1=1"
     sql = text(
-        "SELECT id, content_sample, send_cnt AS send_cnt_24h, send_cnt AS send_cnt_total, "
-        "unique_sender_cnt AS unique_sender_cnt_24h, last_seen, is_filtered "
+        "SELECT id, content_sample, live_date, send_cnt, unique_sender_cnt, last_seen, is_filtered "
         f"FROM daily_hot WHERE {where} "
         "ORDER BY live_date DESC, send_cnt DESC LIMIT 200"
     )
@@ -558,9 +557,8 @@ def live_hot_recompute(
     request: Request,
     sb2099_admin: str | None = Cookie(default=None),
 ):
-    """重 normalize 所有 raw_danmaku → 重建 live_hot 聚合。
-    用于规则变更(如重复折叠)后,把历史 N 个变体合并到一条 base。
-    """
+    """重新规范化所有 raw_danmaku.content_norm，然后触发一次 recount 重建当日 daily_hot。
+    用于 normalize 规则变更后（如重复段折叠）让历史 raw 的归一化对齐再重聚合。"""
     from ..normalize import normalize
 
     _redirect_or_401(request, sb2099_admin)
@@ -591,9 +589,8 @@ def live_hot_rescan(
     request: Request,
     sb2099_admin: str | None = Cookie(default=None),
 ):
-    """改完 live_noise_filters / live_hot_min_length 后调一次:
-    扫所有 live_hot,按当前规则(整句精确匹配 + 长度/字符过滤)重算 is_filtered。
-    """
+    """触发一次 recount：按当前阈值/降噪规则重建当日 daily_hot。
+    （daily_hot 只保留达标且非噪声的内容，过滤在 recount 写入时生效。）"""
     _redirect_or_401(request, sb2099_admin)
     settings_cache.invalidate()
     from ..cron import _recount_sync

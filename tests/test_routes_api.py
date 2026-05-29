@@ -18,7 +18,6 @@ def _seed_daily(content_sample, content_norm=None, *, live_date=None,
     from sqlalchemy import insert as sa_insert, select as sa_select
     from sb2099.db import SessionLocal
     from sb2099.live_day import current_live_window
-    from sb2099.models import DailyHot
     from sb2099.normalize import normalize
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -324,3 +323,19 @@ def test_promote_already_in_barrage_409(client):
     hid = _seed_live_hot("C")
     r = client.post("/api/promote", json={"live_hot_id": hid, "tags": ["00"]})
     assert r.status_code == 409
+
+
+def test_live_week_sums_same_content_across_days(client):
+    from datetime import datetime, timedelta, timezone
+    from sb2099.live_day import current_live_window
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    today, _ = current_live_window(now)
+    earlier = (today - timedelta(days=3)).isoformat()
+    # 同一 content_norm 跨两个数据日，各 send_cnt=7 和 5 → 周榜应聚合为 12
+    _seed_daily("跨天梗", content_norm="跨天梗", live_date=today.isoformat(), send_cnt=7, unique=5)
+    _seed_daily("跨天梗", content_norm="跨天梗", live_date=earlier, send_cnt=5, unique=4)
+    r = client.get("/api/live?window=week")
+    assert r.status_code == 200
+    rows = [d for d in r.json()["data"] if d["content_sample"] == "跨天梗"]
+    assert len(rows) == 1
+    assert rows[0]["send_cnt"] == 12
