@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from ..ratelimit import limiter
 from .routes_admin import router as admin_router
 from .routes_api import router as api_router
 from .routes_public import router as public_router
+from .spa import mount_spa
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("sb2099")
@@ -60,3 +62,8 @@ app.include_router(public_router)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+_FRONTEND_DIST = Path(
+    os.environ.get("SB2099_FRONTEND_DIST", str(Path(__file__).parent / "frontend" / "dist"))
+)
+mount_spa(app, _FRONTEND_DIST)

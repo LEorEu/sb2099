@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-def build_test_app():
+def build_test_app(dist_dir=None):
     """与生产 app 同构但不挂 lifespan（避免 ingest/cron 真连上游 WS）。"""
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
@@ -36,6 +36,9 @@ def build_test_app():
     app.include_router(public_router)
     static_dir = Path(__file__).parent.parent / "sb2099" / "web" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    if dist_dir is not None:
+        from sb2099.web.spa import mount_spa
+        mount_spa(app, Path(dist_dir))
     return app
 
 
