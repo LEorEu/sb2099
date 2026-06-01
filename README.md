@@ -6,7 +6,7 @@
 
 ## 形态
 
-- 三页主站：首页 `/`、全部烂梗 `/barrage`、热门弹幕 `/live`
+- 三页主站（Vue3 SPA）：首页 `/`、全部烂梗 `/barrage`、热门弹幕 `/live`
 - 后台 `/admin/*`：审核、设置、统计
 - 油猴脚本：直播间内消费投稿库，单条复制/发送
 
@@ -25,6 +25,28 @@ copy .env.example .env
 alembic upgrade head
 uvicorn sb2099.web.app:app --reload
 ```
+
+## 前端（Vue3 SPA）
+
+面向用户的三页是 Vite + Vue3 + TypeScript 的单页应用，源码在 `sb2099/web/frontend/`；后端 FastAPI 退成纯 JSON API（`/api/*`），admin 后台仍走 Jinja2。
+
+```powershell
+cd sb2099/web/frontend
+npm install
+npm run dev          # Vite dev server，自动 proxy /api、/admin、/userscript、/static 到 127.0.0.1:8000
+# 另开一个终端跑后端： uvicorn sb2099.web.app:app --reload
+```
+
+构建（部署前必须）：
+
+```powershell
+cd sb2099/web/frontend
+npm run build        # 产出 dist/，由 FastAPI 以 SPA 回退方式托管
+```
+
+- 前端测试：`npm run test`（Vitest）。
+- `dist/` 与 `node_modules/` 不入库；部署时在服务器上 `npm run build`。
+- 后端通过环境变量 `SB2099_FRONTEND_DIST` 可覆盖 dist 路径（默认 `sb2099/web/frontend/dist`）。
 
 ## 工程硬约束
 
