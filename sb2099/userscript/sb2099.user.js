@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
 // @namespace    https://github.com/LEorEu/sb2099
-// @version      0.5.0
+// @version      0.5.1
 // @description  在斗鱼 2099 房间页面内嵌入烂梗库面板：搜索 / 单条复制 / 一键发送，收藏夹可从主站导入
 // @author       sb2099.cn
 // @match        https://www.douyu.com/*
@@ -24,7 +24,9 @@
 
   // ---- 配置 ---------------------------------------------------------------
   const API_BASE = 'https://www.sb2099.cn';
-  const SCRIPT_VERSION = '0.5.0';
+  const HOME_URL = 'https://www.sb2099.cn';
+  const FEEDBACK_URL = 'https://v.wjx.cn/vm/rRSgU2a.aspx#'; // 问卷星反馈表
+  const SCRIPT_VERSION = '0.5.1';
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1'; // 与主站收藏夹同一 key/结构，可互通
 
   // ---- 工具：API 调用 -----------------------------------------------------
@@ -211,7 +213,9 @@
     border-radius: 12px 12px 0 0;
   }
   .sb2099-head .title { font-weight: 600; font-size: 14px; flex: 1; }
-  .sb2099-head .ver { color: #999; font-size: 11px; }
+  .sb2099-head .lnk { color: #ff5252; font-size: 12px; text-decoration: none; padding: 2px 4px; border-radius: 4px; }
+  .sb2099-head .lnk:hover { background: #ffecec; }
+  .sb2099-head .ver { color: #999; font-size: 11px; margin-left: 2px; }
   .sb2099-head .close { background: transparent; border: none; cursor: pointer; font-size: 18px; color: #666; }
 
   .sb2099-tabs { display: flex; border-bottom: 1px solid #eee; }
@@ -341,6 +345,8 @@
   function renderHead() {
     return el('div', { class: 'sb2099-head' }, [
       el('div', { class: 'title' }, ['sb2099 烂梗库']),
+      el('a', { class: 'lnk', href: HOME_URL, target: '_blank', rel: 'noopener', title: '打开主站' }, ['主页']),
+      el('a', { class: 'lnk', href: FEEDBACK_URL, target: '_blank', rel: 'noopener', title: '提交反馈' }, ['反馈']),
       el('div', { class: 'ver' }, ['v' + SCRIPT_VERSION]),
       el('button', { class: 'close', title: '关闭', on: { click: togglePanel } }, ['×']),
     ]);
