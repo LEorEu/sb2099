@@ -234,6 +234,21 @@ def test_submit_barrage_rate_limit_429(client):
     assert r6.status_code == 429
 
 
+def test_submit_signed_user_gets_higher_limit(client):
+    """已选有效用户署名 → 限额放宽到 30/h，连发 6 条仍全部 201（>匿名 5）。"""
+    from sb2099.models import User
+    with _db.SessionLocal() as s:
+        s.add(User(uid="vip", nickname="常客", avatar=None,
+                   first_seen=datetime.utcnow(), last_seen=datetime.utcnow(), source="live"))
+        s.commit()
+    for i in range(6):
+        r = client.post(
+            "/api/barrage",
+            json={"content": f"署名内容编号{i:04d}测试", "tags": ["00"], "submitter_uid": "vip"},
+        )
+        assert r.status_code == 201, f"#{i} {r.text}"
+
+
 def test_copy_barrage_increments(client):
     from sb2099.models import Barrage as _B
     from datetime import datetime

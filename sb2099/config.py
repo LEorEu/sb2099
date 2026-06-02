@@ -47,6 +47,7 @@ DEFAULTS: dict[str, object] = {
     "barrage_min_length": 4,
     "barrage_max_length": 255,
     "ratelimit_submit_per_hour_per_ip": 5,
+    "ratelimit_submit_signed_per_hour_per_ip": 30,
     "ratelimit_report_per_hour_per_ip": 60,
     "ratelimit_copy_per_hour_per_ip": 200,
     "ratelimit_promote_per_hour_per_ip": 5,

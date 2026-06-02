@@ -165,11 +165,19 @@ _SETTING_META: list[dict[str, object]] = [
     },
     {
         "key": "ratelimit_submit_per_hour_per_ip",
-        "label": "每 IP 每小时投稿次数上限",
-        "desc": "超过上限返回 429",
+        "label": "每 IP 每小时投稿次数上限(匿名)",
+        "desc": "未选「我是谁」的匿名投稿，每 IP 每小时上限，超过返回 429",
         "kind": "int",
         "default": 5,
         "hint": "整数",
+    },
+    {
+        "key": "ratelimit_submit_signed_per_hour_per_ip",
+        "label": "每 IP 每小时投稿次数上限(已署名)",
+        "desc": "选了有效用户署名后的投稿，每 IP 每小时上限（独立计数，通常比匿名宽松）",
+        "kind": "int",
+        "default": 30,
+        "hint": "整数，建议 ≥ 匿名上限",
     },
     {
         "key": "ratelimit_report_per_hour_per_ip",

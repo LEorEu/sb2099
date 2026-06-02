@@ -393,9 +393,33 @@ def _enabled_tag_values() -> set[str]:
         )
 
 
+def _enforce_submit_rate(ip_h: str, signed: bool) -> None:
+    """按是否已署名分桶限流：已选有效用户更宽松，匿名更严。两桶独立计数。
+
+    用 slowapi 底层 strategy 手动打点（共用同一存储），因为限额取决于请求体里的
+    submitter_uid，装饰器在拿到 body 前无法区分。
+    """
+    from limits import RateLimitItemPerHour
+
+    if signed:
+        n = int(settings_cache.get("ratelimit_submit_signed_per_hour_per_ip", 30) or 30)
+        bucket = "submit_signed"
+    else:
+        n = int(settings_cache.get("ratelimit_submit_per_hour_per_ip", 5) or 5)
+        bucket = "submit_anon"
+    item = RateLimitItemPerHour(max(1, n))
+    if not limiter.limiter.hit(item, bucket, ip_h):
+        raise HTTPException(status_code=429, detail="submit rate limit exceeded")
+
+
 @router.post("/barrage", status_code=201)
-@limiter.limit(lambda: rate_for("ratelimit_submit_per_hour_per_ip", 5))
 def submit_barrage(request: Request, response: Response, body: SubmitIn) -> dict:
+    # 限流：先判定是否署名（uid 在名册里），匿名 5/h、已署名 30/h，独立分桶
+    ip_h_for_limit = ip_hash(extract_ip(request))
+    with _db.SessionLocal() as _s:
+        _signed = _resolve_submitter_uid(_s, body.submitter_uid) is not None
+    _enforce_submit_rate(ip_h_for_limit, _signed)
+
     # 长度
     min_len = int(settings_cache.get("barrage_min_length", 4) or 4)
     max_len = int(settings_cache.get("barrage_max_length", 255) or 255)

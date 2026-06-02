@@ -40,10 +40,11 @@ test('proposing a new tag POSTs to propose-tag', async () => {
       { status: 201, headers: { 'content-type': 'application/json' } }))
   vi.stubGlobal('fetch', fetchSpy)
   const w = mount(AddTagPanel, { props: { item } })
-  await w.get('.vin').setValue('cp')
   await w.get('.lin').setValue('CP 名场面')
   await w.get('[data-test=propose]').trigger('click')
   await flushPromises()
   expect(fetchSpy.mock.calls[0][0]).toBe('/api/barrage/5/propose-tag')
-  expect(JSON.parse((fetchSpy.mock.calls[0][1] as any).body)).toMatchObject({ value: 'cp', label: 'CP 名场面' })
+  const body = JSON.parse((fetchSpy.mock.calls[0][1] as any).body)
+  expect(body.label).toBe('CP 名场面')
+  expect(body.value).toMatch(/^[0-9A-Za-z]{1,8}$/) // 自动生成的内部值
 })

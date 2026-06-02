@@ -13,8 +13,10 @@ const ident = useIdentityStore()
 const toast = useToast()
 
 const busy = ref(false)
-const newValue = ref('')
 const newLabel = ref('')
+
+// 后端标签需要一个 1-8 位字母数字的内部值；对用户隐藏，自动生成。
+function genValue(): string { return 'u' + Math.random().toString(36).slice(2, 8) }
 
 const have = computed(() => new Set((props.item.tags || '').split(',').map(s => s.trim()).filter(Boolean)))
 const candidates = computed(() => tags.list.filter(t => !have.value.has(t.value)))
@@ -34,15 +36,14 @@ async function vote(value: string) {
 }
 
 async function propose() {
-  const v = newValue.value.trim()
   const l = newLabel.value.trim()
-  if (!/^[0-9A-Za-z]{1,8}$/.test(v)) { toast.push('标签值用 1-8 位字母/数字（如 03、cp）', 'warn'); return }
-  if (!l) { toast.push('给新标签起个显示名', 'warn'); return }
+  if (!l) { toast.push('给标签起个名字', 'warn'); return }
+  if (l.length > 32) { toast.push('标签名太长了（≤32 字）', 'warn'); return }
   busy.value = true
   try {
-    const r = await api.proposeTag(props.item.id, v, l, uid())
+    const r = await api.proposeTag(props.item.id, genValue(), l, uid())
     toast.push(`提议「${l}」已提交，达 ${r.threshold} 票后由管理员审核生效 🙌`, 'ok')
-    newValue.value = ''; newLabel.value = ''
+    newLabel.value = ''
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) toast.push('这个标签已存在，直接点上面的标签投票即可', 'warn')
     else if (e instanceof ApiError && e.status === 429) toast.push('操作太频繁，歇会儿再来', 'warn')
@@ -71,8 +72,7 @@ async function propose() {
       <div class="sec">
         <div class="lab">没有合适的？提议一个新标签</div>
         <div class="proprow">
-          <input v-model="newValue" class="vin" maxlength="8" placeholder="值 如 cp" />
-          <input v-model="newLabel" class="lin" maxlength="32" placeholder="显示名 如 CP 名场面" />
+          <input v-model="newLabel" class="lin" maxlength="32" placeholder="标签名 如 CP名场面 / 名梗" @keyup.enter="propose" />
           <button class="go" :disabled="busy" data-test="propose" @click="propose">提议</button>
         </div>
         <div class="hint">提议会先投你一票，达阈值后由管理员在后台审核通过。</div>
@@ -95,7 +95,6 @@ async function propose() {
 .chip:hover:not(:disabled){background:var(--accent);border-color:var(--accent);color:#fff}
 .chip:disabled{opacity:.5;cursor:default}
 .proprow{display:flex;gap:8px}
-.vin{flex:0 0 92px}
 .lin{flex:1}
 .proprow input{border:1px solid var(--line2);border-radius:9px;background:var(--panel2);padding:9px 11px;font:inherit;font-size:13px;color:var(--ink);outline:none}
 .go{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:0 16px;font-weight:800;font-size:13px;cursor:pointer}
