@@ -6,7 +6,7 @@ import MemeRow from './MemeRow.vue'
 
 const list = ref<Barrage[]>([])
 async function load() {
-  const r = await api.searchBarrage({ sort: 'new', page: 1, size: 5 }).catch(() => null)
+  const r = await api.searchBarrage({ sort: 'new', page: 1, size: 6 }).catch(() => null)
   if (r) list.value = r.list
 }
 defineExpose({ load })
@@ -22,6 +22,7 @@ onMounted(load)
 <style scoped>
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
 h3{font-size:15px;font-weight:800;margin-bottom:13px}
-.memelist{display:flex;flex-direction:column;gap:10px}
+.memelist{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:720px){.memelist{grid-template-columns:1fr}}
 .seeall{display:block;text-align:center;margin-top:13px;font-size:14px;font-weight:800;color:var(--accent)}
 </style>

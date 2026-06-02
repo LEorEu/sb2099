@@ -10,5 +10,5 @@ test('searching >2 chars lists users and selecting emits uid', async () => {
   await w.get('input').setValue('阿松松')
   await flushPromises()
   await w.get('[data-test=hit]').trigger('click')
-  expect(w.emitted('update:uid')![0]).toEqual(['123'])
+  expect(w.emitted('pick')![0]).toEqual([{ uid: '123', nickname: '阿松', avatar: null }])
 })

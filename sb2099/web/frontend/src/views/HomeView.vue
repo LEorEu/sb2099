@@ -15,16 +15,13 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
       <p class="sub">家人们听到的好笑弹幕都丢这儿 · 回直播间 <b>搜一下就能一键发</b></p>
     </div>
     <div class="cols">
-      <div>
-        <SubmitCard @submitted="latest?.load()" />
-        <div style="height:18px"></div>
-        <LatestList ref="latest" />
-      </div>
-      <div>
+      <SubmitCard @submitted="latest?.load()" />
+      <div class="side">
         <DailyMemeCard />
         <ScriptBanner />
       </div>
     </div>
+    <LatestList ref="latest" class="latest" />
   </section>
 </template>
 <style scoped>
@@ -37,5 +34,6 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
 .sub{color:var(--muted);font-size:15px;margin-top:13px}
 .sub b{color:var(--ink)}
 .cols{display:grid;grid-template-columns:1.25fr .9fr;gap:18px;align-items:start}
+.latest{margin-top:18px}
 @media (max-width:820px){.cols{grid-template-columns:1fr}}
 </style>
