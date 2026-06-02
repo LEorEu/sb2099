@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
 // @namespace    https://github.com/LEorEu/sb2099
-// @version      0.2.0
+// @version      0.3.0
 // @description  在斗鱼 2099 房间（real id 12740109）的页面内嵌入烂梗投稿库面板，支持搜索/tag 筛选/本地收藏/单条复制+发送
 // @author       Eu
 // @match        https://www.douyu.com/2099
@@ -26,7 +26,7 @@
   // ---- 配置 ---------------------------------------------------------------
   // 部署到公网后改这一行即可。
   const API_BASE = 'https://www.sb2099.cn';
-  const SCRIPT_VERSION = '0.2.0';
+  const SCRIPT_VERSION = '0.3.0';
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1';
   const STORAGE_KEY_BLOCKED = 'sb2099_blocked_v1';
   const STORAGE_KEY_PANEL_OPEN = 'sb2099_panel_open_v1';
@@ -210,34 +210,43 @@
   // ---- DOM 模板 -----------------------------------------------------------
   const STYLE = `
   .sb2099-fab {
-    position: fixed; right: 16px; bottom: 16px;
-    width: 44px; height: 44px; border-radius: 50%;
-    background: #ff7878; color: #fff; font-weight: 600; font-size: 13px;
+    position: fixed; left: 16px; bottom: 84px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #ff5d5d; color: #fff; font-weight: 700; font-size: 13px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; z-index: 999998;
-    box-shadow: 0 4px 12px rgba(0,0,0,.25);
-    border: none; line-height: 1;
+    cursor: pointer; z-index: 2147483000;
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    border: none; line-height: 1; opacity: .92;
   }
-  .sb2099-fab:hover { background: #ff5252; }
+  .sb2099-fab:hover { background: #ff3d3d; opacity: 1; }
 
+  /* 浮动可拖拽小窗，而非满高抽屉——不再整列挡住聊天 */
   .sb2099-panel {
-    position: fixed; right: 0; top: 0; bottom: 0;
-    width: 380px; max-width: 95vw;
+    position: fixed; left: 16px; top: 84px;
+    width: 340px; max-width: 92vw; max-height: 72vh;
     background: #fff; color: #1a1a1a;
-    box-shadow: -4px 0 16px rgba(0,0,0,.15);
-    z-index: 999999;
-    display: flex; flex-direction: column;
+    border: 1px solid #e5e5e5; border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    z-index: 2147483001;
+    display: none; flex-direction: column; overflow: hidden;
     font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    transform: translateX(100%);
-    transition: transform .25s ease;
   }
-  .sb2099-panel.open { transform: translateX(0); }
+  .sb2099-panel.open { display: flex; }
   .sb2099-panel * { box-sizing: border-box; }
 
   .sb2099-head {
     display: flex; align-items: center; gap: 8px;
-    padding: 10px 14px; border-bottom: 1px solid #eee;
+    padding: 9px 12px; border-bottom: 1px solid #eee;
+    cursor: move; user-select: none; background: #fafafa;
+    border-radius: 12px 12px 0 0;
   }
+  /* 注入到斗鱼聊天工具栏的常驻开关 */
+  .sb2099-tbtn {
+    font-size: 13px; height: 26px; padding: 0 10px; margin-right: 14px;
+    background: #ff5d23; color: #fff; border: none; border-radius: 5px;
+    cursor: pointer; line-height: 26px;
+  }
+  .sb2099-tbtn:hover { background: #ff4500; }
   .sb2099-head .title { font-weight: 600; font-size: 14px; flex: 1; }
   .sb2099-head .ver { color: #999; font-size: 11px; }
   .sb2099-head .close {
@@ -359,7 +368,7 @@
   let $panel, $body;
 
   function renderRoot() {
-    const fab = el('button', { class: 'sb2099-fab', title: 'sb2099 烂梗库' }, ['sb']);
+    const fab = el('button', { class: 'sb2099-fab', title: 'sb2099 烂梗库（点开/关）' }, ['梗']);
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
@@ -369,11 +378,55 @@
       $panel.classList.add('open');
     }
     refreshPanel();
+    enableDrag($panel);          // 头部拖拽，可把窗挪开聊天区
+    startToolbarButton();        // 往斗鱼聊天工具栏注入常驻「烂梗」开关
   }
 
   function togglePanel() {
     const open = $panel.classList.toggle('open');
     saveJSON(STORAGE_KEY_PANEL_OPEN, open);
+  }
+
+  // 把开关按钮注入到斗鱼聊天工具栏，并定时补注入——这样刷新 / 斗鱼 SPA 重渲染后
+  // 开关都还在，不会出现「关掉就再也找不到」。面板默认隐藏，点开关才显示。
+  function startToolbarButton() {
+    function inject() {
+      const bar = document.querySelector('.ChatToolBar__right')
+        || document.querySelector('.ChatToolBar-right')
+        || document.querySelector('.ChatToolBar__left');
+      if (bar && !bar.querySelector('#sb2099-tbtn')) {
+        const btn = el('button', { id: 'sb2099-tbtn', class: 'sb2099-tbtn', title: 'sb2099 烂梗库' }, ['🐹 烂梗']);
+        btn.addEventListener('click', togglePanel);
+        bar.insertBefore(btn, bar.firstChild);
+      }
+    }
+    inject();
+    setInterval(inject, 2000);
+  }
+
+  // 拖拽：按住标题栏移动整个面板（按钮上不触发，避免和关闭冲突）
+  function enableDrag(panel) {
+    let dragging = false, ox = 0, oy = 0;
+    panel.addEventListener('pointerdown', (e) => {
+      const head = e.target.closest && e.target.closest('.sb2099-head');
+      if (!head || !panel.contains(head)) return;
+      if (e.target.closest('button')) return;
+      dragging = true;
+      const r = panel.getBoundingClientRect();
+      ox = e.clientX - r.left; oy = e.clientY - r.top;
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    panel.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const maxX = window.innerWidth - 60, maxY = window.innerHeight - 60;
+      panel.style.left = Math.min(maxX, Math.max(0, e.clientX - ox)) + 'px';
+      panel.style.top = Math.min(maxY, Math.max(0, e.clientY - oy)) + 'px';
+    });
+    const end = () => { dragging = false; };
+    panel.addEventListener('pointerup', end);
+    panel.addEventListener('pointercancel', end);
   }
 
   function refreshPanel() {

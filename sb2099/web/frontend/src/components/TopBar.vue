@@ -10,7 +10,10 @@ const REPO = 'https://github.com/LEorEu/sb2099'
 <template>
   <header class="topbar">
     <div class="inner app-wrap">
-      <router-link class="brand" to="/"><img class="logo" src="/logo.jpg" alt="" />SB2099</router-link>
+      <div class="left">
+        <router-link class="brand" to="/"><img class="logo" src="/logo.jpg" alt="" />SB2099</router-link>
+        <span v-if="online > 0" class="online" title="近 1 分钟在线人数（心跳统计）"><span class="dotlive"></span>{{ online }} 在线</span>
+      </div>
       <nav class="nav">
         <router-link to="/" active-class="on" exact-active-class="on">首页</router-link>
         <router-link to="/barrage" active-class="on">全部烂梗</router-link>
@@ -18,7 +21,6 @@ const REPO = 'https://github.com/LEorEu/sb2099'
         <!-- <span class="more">更多 ▾</span> -->
       </nav>
       <div class="tools">
-        <span v-if="online > 0" class="online" title="近 1 分钟在线人数（心跳统计）"><span class="dotlive"></span>{{ online }} 在线</span>
         <button class="ibtn" title="收藏夹" @click="emit('open-favorites')">⭐<span v-if="favCount" class="dot">{{ favCount }}</span></button>
         <button class="ibtn" title="切换深浅" @click="toggle()">🌓</button>
         <a class="ibtn" :href="REPO" target="_blank" rel="noopener" title="GitHub 项目">
@@ -32,7 +34,8 @@ const REPO = 'https://github.com/LEorEu/sb2099'
 <style scoped>
 .topbar{height:60px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
 .inner{height:100%;display:flex;align-items:center;justify-content:space-between}
-.brand{font-weight:900;font-size:20px;display:flex;align-items:center;gap:9px;flex:1}
+.left{flex:1;display:flex;align-items:center;gap:11px;min-width:0}
+.brand{font-weight:900;font-size:20px;display:flex;align-items:center;gap:9px}
 .logo{width:30px;height:30px;border-radius:9px;object-fit:cover;box-shadow:0 2px 6px rgba(0,0,0,.18)}
 .nav{display:flex;gap:2px}
 .nav a,.nav .more{padding:7px 13px;border-radius:9px;color:var(--muted);font-size:14px;font-weight:700}

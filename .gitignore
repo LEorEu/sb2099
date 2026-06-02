@@ -43,3 +43,6 @@ api.md
 sb6657-api-snapshot.md
 # brainstorming visual companion scratch
 .superpowers/
+
+# 第三方参考脚本，仅本地对比用，不入库
+/sb6657.js
