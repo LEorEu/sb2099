@@ -12,7 +12,7 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
     <div class="hero">
       <a class="kicker" href="https://www.douyu.com/2099" target="_blank" rel="noopener">斗鱼 2099 · 一团肉松子直播间 ↗</a>
       <h1><span class="mark">团松子</span>烂梗收集站</h1>
-      <p class="sub">家人们听到的好笑弹幕都丢这儿 · 回直播间 <b>搜一下就能一键发</b></p>
+      <p class="sub">原创烂梗弹幕在这里投稿 · 回直播间 <b>搜一下就能一键发</b></p>
     </div>
     <div class="cols">
       <SubmitCard @submitted="latest?.load()" />

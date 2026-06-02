@@ -15,7 +15,7 @@ function pick(u: UserHit) { hits.value = []; q.value = ''; emit('pick', u) }
 </script>
 <template>
   <div class="picker">
-    <input v-model="q" placeholder="选「我是谁」可署名（昵称/UID，≥3 字符；留空匿名）" @input="onInput" />
+    <input v-model="q" placeholder="输入自己的斗鱼昵称/UID即可署名（≥3 字符；留空匿名）" @input="onInput" />
     <ul v-if="hits.length" class="results">
       <li v-for="u in hits" :key="u.uid" data-test="hit" @click="pick(u)">
         <img v-if="u.avatar" class="av" :src="u.avatar" alt="" referrerpolicy="no-referrer" />

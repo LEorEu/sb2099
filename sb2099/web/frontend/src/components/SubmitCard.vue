@@ -39,8 +39,8 @@ async function submit() {
 </script>
 <template>
   <div class="card">
-    <h3>🎤 投个梗 <span class="pill">最多 255 字 · 自动查重</span></h3>
-    <textarea v-model="content" maxlength="255" placeholder="听到啥好笑的弹幕，丢进来…"></textarea>
+    <h3>🎤 投稿 <span class="pill">最少 6 字 · 自动查重</span></h3>
+    <textarea v-model="content" maxlength="255" placeholder="你的烂梗比不过我你信吗"></textarea>
     <div class="tagrow">
       <span v-for="t in tags.list" :key="t.value" :data-test="`tag-${t.value}`"
             class="tagpick" :class="{ on: picked.has(t.value) }" @click="toggle(t.value)">{{ t.label }}</span>
