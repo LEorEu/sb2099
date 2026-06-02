@@ -375,3 +375,56 @@ def test_by_ids_empty_param(client):
     r = client.get("/api/barrage/by-ids?ids=")
     assert r.status_code == 200
     assert r.json()["data"] == []
+
+
+# ---- live 24h window + first sender ---------------------------------------
+
+
+def _seed_daily_at(content_sample, content_norm, *, live_date, last_seen, send_cnt=10, unique=5):
+    from sqlalchemy import insert as sa_insert
+    from sb2099.db import SessionLocal
+    with SessionLocal() as s:
+        s.execute(sa_insert(DailyHot).values(
+            live_date=live_date, content_norm=content_norm, content_sample=content_sample,
+            send_cnt=send_cnt, unique_sender_cnt=unique,
+            first_seen=last_seen, last_seen=last_seen, page_copy_cnt=0, is_filtered=False,
+        ))
+        s.commit()
+
+
+def test_live_day_is_rolling_24h_across_live_date(client):
+    """昨晚的数据日（live_date=昨天）但 last_seen 在 24h 内，day 窗口应仍能看到。"""
+    from datetime import datetime, timezone, timedelta
+    from sb2099.live_day import current_live_window
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    today, _ = current_live_window(now)
+    yesterday = (today - timedelta(days=1)).isoformat()
+    _seed_daily_at("昨晚的梗", "yest_cn", live_date=yesterday, last_seen=now - timedelta(hours=2), send_cnt=30)
+    _seed_daily_at("太久以前", "old_cn", live_date=yesterday, last_seen=now - timedelta(hours=30), send_cnt=99)
+    r = client.get("/api/live?window=day")
+    samples = [d["content_sample"] for d in r.json()["data"]]
+    assert "昨晚的梗" in samples          # 24h 内，保留
+    assert "太久以前" not in samples       # 超过 24h，排除
+
+
+def test_live_includes_first_sender(client):
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import insert as sa_insert
+    from sb2099.models import RawDanmaku, User
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    _seed_daily("初见梗", content_norm="firstcn", send_cnt=12, unique=3)
+    with _db.SessionLocal() as s:
+        s.add(User(uid="u1", nickname="头号粉丝", avatar="avatar_v3/x/y",
+                   first_seen=now, last_seen=now, source="live"))
+        # 较早的一条（首发）与较晚的一条
+        s.execute(sa_insert(RawDanmaku).values(
+            ts=now - timedelta(minutes=10), uid="u1", nickname="头号粉丝",
+            content_raw="初见梗", content_norm="firstcn"))
+        s.execute(sa_insert(RawDanmaku).values(
+            ts=now - timedelta(minutes=1), uid="u2", nickname="后来的人",
+            content_raw="初见梗", content_norm="firstcn"))
+        s.commit()
+    r = client.get("/api/live?window=day")
+    row = next(d for d in r.json()["data"] if d["content_sample"] == "初见梗")
+    assert row["first_sender"]["nickname"] == "头号粉丝"
+    assert row["first_sender"]["avatar"]  # 拼出了完整 URL

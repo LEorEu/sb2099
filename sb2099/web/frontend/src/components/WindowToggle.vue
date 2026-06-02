@@ -4,7 +4,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: 'day' | 'week'): void }>(
 </script>
 <template>
   <div class="wt">
-    <a :class="{ on: modelValue === 'day' }" @click="emit('update:modelValue', 'day')">今日 Top 10</a>
+    <a :class="{ on: modelValue === 'day' }" @click="emit('update:modelValue', 'day')">24 小时 Top 10</a>
     <a :class="{ on: modelValue === 'week' }" @click="emit('update:modelValue', 'week')">近 7 天 Top 50</a>
   </div>
 </template>

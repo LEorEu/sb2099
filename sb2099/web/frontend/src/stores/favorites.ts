@@ -36,6 +36,13 @@ export const useFavoritesStore = defineStore('favorites', {
       const arr = this.groups[group]; if (!arr) return
       const i = arr.indexOf(id); if (i >= 0) { arr.splice(i, 1); this.persist() }
     },
+    removeGroup(name: string) {
+      if (name === '默认') return  // 基础分组不可删
+      if (!this.groups[name]) return
+      delete this.groups[name]
+      this.order = this.order.filter(g => g !== name)
+      this.persist()
+    },
     move(id: number, from: string, to: string) {
       if (from === to) return
       const src = this.groups[from]

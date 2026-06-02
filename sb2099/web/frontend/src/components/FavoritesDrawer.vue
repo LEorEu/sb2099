@@ -45,6 +45,16 @@ function removeOne(id: number) {
 }
 function copyOne(b: Barrage) { copy(b.content, 'barrage', b.id) }
 
+function delGroup() {
+  const g = active.value
+  if (g === '默认') return
+  const n = (favs.groups[g] || []).length
+  if (!confirm(`删除「${g}」分组？组内 ${n} 条收藏会一并移除（其它分组不受影响，可先「移到」别处）。`)) return
+  favs.removeGroup(g)
+  active.value = favs.order[0] || '默认'
+  loadActive()
+  toast.push(`已删除「${g}」分组`)
+}
 function newGroup() {
   const name = prompt('新建收藏夹分组名：')?.trim()
   if (name) { favs.addGroup(name); active.value = name }
@@ -74,6 +84,11 @@ function doImport() {
           {{ g }}<span class="n">{{ (favs.groups[g] || []).length }}</span>
         </button>
         <button class="tab add" @click="newGroup">＋</button>
+      </div>
+
+      <div v-if="active !== '默认'" class="grpbar">
+        <span>当前分组「{{ active }}」</span>
+        <button data-test="del-group" @click="delGroup">🗑 删除分组</button>
       </div>
 
       <div class="items">
@@ -115,6 +130,8 @@ function doImport() {
 .tab.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep)}
 .tab .n{font-size:11px;font-weight:800;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:0 6px}
 .tab.add{color:var(--subtle)}
+.grpbar{display:flex;align-items:center;justify-content:space-between;margin:-4px 0 12px;font-size:12px;color:var(--subtle)}
+.grpbar button{border:none;background:none;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer}
 .items{flex:1;display:flex;flex-direction:column;gap:9px}
 .ph{padding:34px 10px;text-align:center;color:var(--subtle);font-size:13px;line-height:1.6}
 .fitem{border:1px solid var(--line);border-radius:11px;background:var(--panel2);padding:11px 12px}

@@ -28,6 +28,20 @@ test('move shifts id between groups', () => {
   expect(s.groups['新组']).toEqual([7])
 })
 
+test('removeGroup drops custom group but never 默认', () => {
+  const s = useFavoritesStore()
+  s.addGroup('临时')
+  s.add(3, '临时')
+  s.removeGroup('临时')
+  expect(s.order).not.toContain('临时')
+  expect(s.groups['临时']).toBeUndefined()
+  // 默认不可删
+  s.add(9, '默认')
+  s.removeGroup('默认')
+  expect(s.order).toContain('默认')
+  expect(s.groups['默认']).toEqual([9])
+})
+
 test('import replaces and validates', () => {
   const s = useFavoritesStore()
   const ok = s.importJson(JSON.stringify({ groups: { 默认: [1] }, order: ['默认'] }))
