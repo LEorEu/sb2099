@@ -25,6 +25,8 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   getTags: () => req<{ data: Tag[] }>('/api/tags').then(r => r.data),
   getRandom: () => req<{ data: Barrage }>('/api/random').then(r => r.data),
+  getBarragesByIds: (ids: number[]) =>
+    req<{ data: Barrage[] }>(`/api/barrage/by-ids?ids=${ids.join(',')}`).then(r => r.data),
   searchBarrage: (p: { q?: string; tag?: string; sort?: 'new' | 'hot'; page?: number; size?: number }) => {
     const qs = new URLSearchParams()
     if (p.q) qs.set('q', p.q)
@@ -46,6 +48,10 @@ export const api = {
     req<{ data: Barrage }>('/api/promote', { method: 'POST', body: JSON.stringify({ live_hot_id, tags, submitter_uid }) }).then(r => r.data),
   report: (id: number) => req('/api/barrage/report', { method: 'POST', body: JSON.stringify({ id }) }),
   voteTag: (barrageId: number, tag_value: string, voter_uid: string | null) =>
-    req(`/api/barrage/${barrageId}/vote-tag`, { method: 'POST', body: JSON.stringify({ tag_value, voter_uid }) }),
+    req<{ data: { tag: string; count: number; threshold: number; applied: boolean; pending_approval: boolean } }>(
+      `/api/barrage/${barrageId}/vote-tag`, { method: 'POST', body: JSON.stringify({ tag_value, voter_uid }) }).then(r => r.data),
+  proposeTag: (barrageId: number, value: string, label: string, voter_uid: string | null) =>
+    req<{ data: { tag: string; label: string; count: number; threshold: number; pending_approval: boolean } }>(
+      `/api/barrage/${barrageId}/propose-tag`, { method: 'POST', body: JSON.stringify({ value, label, voter_uid }) }).then(r => r.data),
   withdraw: (id: number) => req(`/api/submission/${id}/withdraw`, { method: 'DELETE' }),
 }

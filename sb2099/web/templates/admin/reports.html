@@ -26,6 +26,9 @@
         </div>
         
         <div class="actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+          <form method="post" action="/admin/barrage/{{ it.id }}/dismiss_reports" onsubmit="return confirm('将「这条没问题」？\n会清空该条的全部反馈记录并移出本列表，投稿保持正常展示。')">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px 16px; font-size: 12px;">✓ 这条没问题</button>
+          </form>
           {% if it.status == 'active' %}
             <form method="post" action="/admin/barrage/{{ it.id }}/reject" onsubmit="return confirm('⚠️ 确定要对此条高反馈投稿进行下架吗？\n下架后条目将进入回收站，正式库中将无法搜索到。')">
               <button type="submit" class="btn btn-secondary danger" style="padding: 6px 16px; font-size: 12px;">立即下架并软删除</button>

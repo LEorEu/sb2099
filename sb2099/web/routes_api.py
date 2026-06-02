@@ -170,6 +170,51 @@ def get_barrage(
     return {"data": search_barrage(q=q, tags=tags, sort=sort, page=page, size=size)}
 
 
+@router.get("/barrage/by-ids")
+def get_barrages_by_ids(ids: str = Query("", description="CSV barrage ids，最多 200")) -> dict:
+    """按 id 批量取 active 投稿正文，供收藏夹展示。保持请求顺序，丢弃失效 id。"""
+    from ..users import avatar_url
+
+    id_list: list[int] = []
+    seen: set[int] = set()
+    for part in ids.split(","):
+        part = part.strip()
+        if part.isdigit():
+            n = int(part)
+            if n not in seen:
+                seen.add(n)
+                id_list.append(n)
+    id_list = id_list[:200]
+    if not id_list:
+        return {"data": []}
+    with _db.SessionLocal() as s:
+        rows = s.execute(
+            select(
+                Barrage.id, Barrage.content, Barrage.tags, Barrage.cnt, Barrage.submit_time,
+                User.nickname.label("submitter_nickname"),
+                User.avatar.label("submitter_avatar"),
+            )
+            .outerjoin(User, User.uid == Barrage.submitter_uid)
+            .where(Barrage.id.in_(id_list), Barrage.status == "active")
+        ).all()
+    by_id: dict[int, dict] = {}
+    for r in rows:
+        submitter = (
+            {"nickname": r.submitter_nickname, "avatar": avatar_url(r.submitter_avatar)}
+            if r.submitter_nickname
+            else None
+        )
+        by_id[r.id] = {
+            "id": r.id,
+            "content": r.content,
+            "tags": r.tags,
+            "cnt": r.cnt,
+            "submit_time": r.submit_time.isoformat() if r.submit_time else None,
+            "submitter": submitter,
+        }
+    return {"data": [by_id[i] for i in id_list if i in by_id]}
+
+
 @router.get("/users/search")
 @limiter.limit(lambda: rate_for("ratelimit_copy_per_hour_per_ip", 200))
 def search_users(request: Request, q: str = "", limit: int = 10) -> dict:

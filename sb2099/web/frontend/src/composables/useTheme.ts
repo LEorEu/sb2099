@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 
 type Theme = 'light' | 'dark'
-const KEY = 'sb2099-theme'
+// 主站与后台视作两个站点，主题各自存储互不影响（后台用 sb2099-theme）
+const KEY = 'sb2099-spa-theme'
 
 function read(): Theme {
   try {

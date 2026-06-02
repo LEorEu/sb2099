@@ -551,6 +551,25 @@ def reports_page(
     )
 
 
+@router.post("/barrage/{barrage_id:int}/dismiss_reports")
+def dismiss_reports(
+    request: Request,
+    barrage_id: int,
+    sb2099_admin: str | None = Cookie(default=None),
+):
+    """「这条没问题」：清零 report_cnt 并删除该条所有反馈记录，使其退出反馈列表。
+    投稿本身保持 active，不下架。"""
+    _redirect_or_401(request, sb2099_admin)
+    with _db.SessionLocal() as s:
+        row = s.get(Barrage, barrage_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="barrage not found")
+        s.execute(delete(BarrageReport).where(BarrageReport.barrage_id == barrage_id))
+        row.report_cnt = 0
+        s.commit()
+    return RedirectResponse(url="/admin/barrage/reports", status_code=303)
+
+
 @router.get("/barrage/_trash", response_class=HTMLResponse)
 def trash_page(
     request: Request,

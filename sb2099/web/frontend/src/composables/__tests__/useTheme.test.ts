@@ -12,5 +12,5 @@ test('defaults to light and toggles + persists', () => {
   toggle()
   expect(theme.value).toBe('dark')
   expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-  expect(localStorage.getItem('sb2099-theme')).toBe('dark')
+  expect(localStorage.getItem('sb2099-spa-theme')).toBe('dark')
 })

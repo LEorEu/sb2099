@@ -339,3 +339,39 @@ def test_live_week_sums_same_content_across_days(client):
     rows = [d for d in r.json()["data"] if d["content_sample"] == "跨天梗"]
     assert len(rows) == 1
     assert rows[0]["send_cnt"] == 12
+
+
+# ---- barrage/by-ids -------------------------------------------------------
+
+
+def _seed_barrage(content, *, status="active", tags="00"):
+    from sb2099.models import Barrage as _B
+    with _db.SessionLocal() as s:
+        b = _B(content=content, content_norm=content, tags=tags, source="user",
+               submit_time=datetime.utcnow(), cnt=0, status=status)
+        s.add(b)
+        s.commit()
+        return b.id
+
+
+def test_by_ids_returns_active_in_request_order(client):
+    a = _seed_barrage("第一条")
+    b = _seed_barrage("第二条")
+    r = client.get(f"/api/barrage/by-ids?ids={b},{a}")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert [d["content"] for d in data] == ["第二条", "第一条"]
+
+
+def test_by_ids_drops_inactive_and_missing(client):
+    a = _seed_barrage("在库")
+    gone = _seed_barrage("已删", status="deleted")
+    r = client.get(f"/api/barrage/by-ids?ids={a},{gone},999999")
+    assert r.status_code == 200
+    assert [d["id"] for d in r.json()["data"]] == [a]
+
+
+def test_by_ids_empty_param(client):
+    r = client.get("/api/barrage/by-ids?ids=")
+    assert r.status_code == 200
+    assert r.json()["data"] == []

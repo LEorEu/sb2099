@@ -418,3 +418,26 @@ def test_stats_renders(admin_client):
     assert r.status_code == 200
     assert "hashAAA" in r.text
     assert "24h 新增投稿" in r.text
+
+
+# ---- dismiss reports ------------------------------------------------------
+
+
+def test_dismiss_reports_clears_count_and_rows(admin_client):
+    bid = _make_barrage("active", "误报的梗")
+    with _db.SessionLocal() as s:
+        b = s.get(Barrage, bid)
+        b.report_cnt = 2
+        s.add(BarrageReport(barrage_id=bid, ip_hash="h1", ts=datetime.utcnow()))
+        s.commit()
+    r = admin_client.post(f"/admin/barrage/{bid}/dismiss_reports")
+    assert r.status_code == 303
+    with _db.SessionLocal() as s:
+        row = s.get(Barrage, bid)
+        assert row.report_cnt == 0
+        assert row.status == "active"  # 未下架
+        remaining = s.query(BarrageReport).filter_by(barrage_id=bid).count()
+        assert remaining == 0
+    # 已退出反馈列表
+    lst = admin_client.get("/admin/barrage/reports")
+    assert "误报的梗" not in lst.text

@@ -15,6 +15,19 @@ test('add/remove persists and counts', () => {
   expect(s.totalCount).toBe(1)
 })
 
+test('move shifts id between groups', () => {
+  const s = useFavoritesStore()
+  s.add(7, '默认')
+  s.addGroup('骂战')
+  s.move(7, '默认', '骂战')
+  expect(s.groups['默认']).toEqual([])
+  expect(s.groups['骂战']).toEqual([7])
+  // 移到不存在的分组会自动建
+  s.move(7, '骂战', '新组')
+  expect(s.order).toContain('新组')
+  expect(s.groups['新组']).toEqual([7])
+})
+
 test('import replaces and validates', () => {
   const s = useFavoritesStore()
   const ok = s.importJson(JSON.stringify({ groups: { 默认: [1] }, order: ['默认'] }))
