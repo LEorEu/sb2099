@@ -23,6 +23,15 @@ def mount_spa(app: FastAPI, dist_dir: Path) -> None:
     async def spa_fallback(full_path: str, request: Request):  # noqa: ARG001
         if full_path.startswith(SPA_EXCLUDE):
             return JSONResponse(status_code=404, content={"detail": "not found"})
+        # dist 根目录下的真实静态文件（logo.jpg / favicon / robots.txt 等）直接返回，
+        # 不能被 SPA 回退吃掉。带路径穿越防护：解析后必须仍在 dist 内。
+        if full_path and full_path != "index.html":
+            try:
+                candidate = (dist_dir / full_path).resolve()
+                if candidate.is_file() and candidate.is_relative_to(dist_dir.resolve()):
+                    return FileResponse(candidate)
+            except (OSError, ValueError):
+                pass
         index = dist_dir / "index.html"
         if index.is_file():
             return FileResponse(index, media_type="text/html")
