@@ -60,7 +60,7 @@ function onReport() {
       <button class="ic2" data-test="fav" :class="{ on: faved }" :title="faved ? '点击取消收藏' : '收藏'" @click="onFav">{{ faved ? '♥' : '♡' }}</button>
       <ActionPopover>
         <button data-test="addtag" @click="addTagOpen = true">🏷️ 补个标签</button>
-        <button class="warn" data-test="report" @click="onReport">🚩 这条不合适</button>
+        <button class="warn" data-test="report" @click="onReport">🚩 举报</button>
       </ActionPopover>
     </div>
     <AddTagPanel v-if="addTagOpen" :item="item" @close="addTagOpen = false" />

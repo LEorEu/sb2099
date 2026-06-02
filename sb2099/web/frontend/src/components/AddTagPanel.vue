@@ -69,7 +69,7 @@ async function propose() {
       <div class="sec">
         <div class="lab">没有合适的？提议一个新标签</div>
         <div class="proprow">
-          <input v-model="newLabel" class="lin" maxlength="32" placeholder="标签名 如 CP名场面 / 名梗" @keyup.enter="propose" />
+          <input v-model="newLabel" class="lin" maxlength="32" placeholder="标签名" @keyup.enter="propose" />
           <button class="go" :disabled="busy" data-test="propose" @click="propose">提议</button>
         </div>
         <div class="hint">提议会先投你一票，达阈值后由管理员在后台审核通过。</div>

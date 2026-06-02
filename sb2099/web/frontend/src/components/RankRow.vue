@@ -56,7 +56,7 @@ async function confirmPromote() {
     </div>
     <div class="grab">
       <span v-if="item.in_library" class="done">✓ 已在库</span>
-      <button v-else data-test="promote" class="save" @click="picking = !picking">收进梗库</button>
+      <button v-else data-test="promote" class="save" @click="picking = !picking">收录</button>
       <button class="copy" @click="onCopy">复制</button>
     </div>
   </div>
