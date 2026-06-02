@@ -72,7 +72,7 @@ def test_withdraw_expired_token_rejected(client):
     body = _submit_active(client)
     bid = body["id"]
     # 把 cookie 换成一个 expires_at 已过去的合法签名（通过私 API 生成）
-    from sb2099.web.routes_api import _hmac_token
+    from sb2099.web.routes_api.submission import _hmac_token
     from sb2099.ratelimit import ip_hash, extract_ip
     # client 默认 IP 是 testserver；用 sha256 替我们计算 ip_hash
     # 用一个我们知道是签发主体的 ip_hash → 走真实 extract_ip 流程：

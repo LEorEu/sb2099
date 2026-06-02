@@ -235,7 +235,7 @@ def test_submit_barrage_rate_limit_429(client):
 
 
 def test_presence_counts_distinct_ips(client):
-    import sb2099.web.routes_api as ra
+    import sb2099.web.routes_api.presence as ra
     with ra._presence_lock:
         ra._presence.clear()
     r1 = client.get("/api/presence", headers={"x-forwarded-for": "1.1.1.1"})
