@@ -23,6 +23,12 @@ test('shows content, copy count text, and copy button works', async () => {
   expect((navigator.clipboard.writeText as any)).toHaveBeenCalledWith('男厕所在五楼')
 })
 
+test('clicking the row body copies the content', async () => {
+  const w = mount(MemeRow, { props: { item } })
+  await w.get('[data-test=row-copy]').trigger('click')
+  expect((navigator.clipboard.writeText as any)).toHaveBeenCalledWith('男厕所在五楼')
+})
+
 test('favorite toggles store', async () => {
   const w = mount(MemeRow, { props: { item } })
   await w.get('[data-test=fav]').trigger('click')

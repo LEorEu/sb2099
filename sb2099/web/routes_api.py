@@ -173,14 +173,19 @@ def _first_senders(norms: list[str]) -> dict[str, dict]:
 
 @router.get("/live")
 def get_live(window: Literal["day", "week"] = "day") -> dict:
+    from ..normalize import strip_decorations
+    from ..ingest.aggregator import normalized_suffix_strips, normalized_cut_markers
+
     rows = _live_rows(window)
     first_by_norm = _first_senders([r["content_norm"] for r in rows])
+    _suf = normalized_suffix_strips()
+    _cm = normalized_cut_markers()
     return {
         "window": window,
         "data": [
             {
                 "id": r["id"],
-                "content_sample": r["content_sample"],
+                "content_sample": strip_decorations(r["content_sample"], _suf, _cm),
                 "send_cnt": int(r["send_cnt"] or 0),
                 "unique_senders": int(r["unique_senders"] or 0),
                 "last_seen": (
@@ -599,7 +604,11 @@ def promote(request: Request, response: Response, body: PromoteIn) -> dict:
         ).scalar_one_or_none()
         if hot is None:
             raise HTTPException(status_code=404, detail="live_hot not found")
-        content = hot.content_sample
+        from ..normalize import strip_decorations
+        from ..ingest.aggregator import normalized_suffix_strips, normalized_cut_markers
+        content = strip_decorations(
+            hot.content_sample, normalized_suffix_strips(), normalized_cut_markers()
+        )
         content_norm = hot.content_norm
         existing = s.execute(
             select(Barrage).where(Barrage.content_norm == content_norm)

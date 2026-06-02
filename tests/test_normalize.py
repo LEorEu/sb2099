@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from sb2099.normalize import normalize
+from sb2099.normalize import normalize, strip_decorations
 
 
 @pytest.mark.parametrize(
@@ -96,6 +96,21 @@ def test_normalize_strip_suffixes(raw: str, suffixes, expected: str) -> None:
 )
 def test_normalize_cut_markers(raw: str, markers, expected: str) -> None:
     assert normalize(raw, cut_markers=markers) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, suf, cm, expected",
+    [
+        # 展示清理：去尾巴但保留 emoji / 重复（不折叠）
+        ("观看体验😄喵", ("喵",), (), "观看体验😄"),
+        ("松宝宝可爱捏🥰松宝宝可爱捏🥰喵", ("喵",), (), "松宝宝可爱捏🥰松宝宝可爱捏🥰"),
+        ("内容Oᴗoಣ喵~", ("喵",), ("Oᴗoಣ",), "内容"),
+        ("plc你个蠢🐷喵", ("喵",), (), "plc你个蠢🐷"),
+        ("没尾巴的正常梗", ("喵",), ("Oᴗoಣ",), "没尾巴的正常梗"),
+    ],
+)
+def test_strip_decorations(raw, suf, cm, expected):
+    assert strip_decorations(raw, suffixes=suf, cut_markers=cm) == expected
 
 
 def test_cut_marker_and_suffix_together():

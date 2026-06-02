@@ -31,11 +31,11 @@ function onReport() {
 </script>
 <template>
   <div class="meme">
-    <div class="main">
+    <div class="main" data-test="row-copy" title="点这条直接复制" @click="onCopy">
       <div class="c">{{ item.content }}</div>
       <div class="meta">
         <span class="copies">🔥 被复制 {{ item.cnt }} 次</span>
-        <span class="hint">悬停看标签 / 投稿人</span>
+        <span class="hint">点这条复制 · 悬停看标签/投稿人</span>
       </div>
       <div class="hovercard" role="tooltip">
         <div class="hc-row">
@@ -68,7 +68,7 @@ function onReport() {
 </template>
 <style scoped>
 .meme{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;display:flex;align-items:center;gap:16px}
-.main{flex:1;min-width:0;position:relative}
+.main{flex:1;min-width:0;position:relative;cursor:pointer}
 .c{font-size:16px;font-weight:600;line-height:1.5}
 .meta{margin-top:7px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .copies{font-size:12px;color:var(--subtle)}

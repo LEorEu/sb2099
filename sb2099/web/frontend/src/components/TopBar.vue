@@ -7,7 +7,7 @@ const { toggle } = useTheme()
 <template>
   <header class="topbar">
     <div class="inner app-wrap">
-      <router-link class="brand" to="/"><span class="blob"></span>sb2099</router-link>
+      <router-link class="brand" to="/"><img class="logo" src="/logo.jpg" alt="" />团松子</router-link>
       <nav class="nav">
         <router-link to="/" active-class="on" exact-active-class="on">首页</router-link>
         <router-link to="/barrage" active-class="on">全部烂梗</router-link>
@@ -25,8 +25,8 @@ const { toggle } = useTheme()
 <style scoped>
 .topbar{height:60px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
 .inner{height:100%;display:flex;align-items:center;justify-content:space-between}
-.brand{font-weight:900;font-size:20px;display:flex;align-items:center;gap:8px;flex:1}
-.blob{width:21px;height:21px;border-radius:8px 8px 8px 2px;background:var(--accent);transform:rotate(-6deg);box-shadow:2px 2px 0 var(--ink)}
+.brand{font-weight:900;font-size:20px;display:flex;align-items:center;gap:9px;flex:1}
+.logo{width:30px;height:30px;border-radius:9px;object-fit:cover;box-shadow:0 2px 6px rgba(0,0,0,.18)}
 .nav{display:flex;gap:2px}
 .nav a,.nav .more{padding:7px 13px;border-radius:9px;color:var(--muted);font-size:14px;font-weight:700}
 .nav a.on{color:var(--accent);background:var(--accent-soft)}

@@ -422,6 +422,15 @@ def test_live_day_is_rolling_24h_across_live_date(client):
     assert "太久以前" not in samples       # 超过 24h，排除
 
 
+def test_live_sample_strips_suffix_for_display(client):
+    """content_norm 已剥尾缀合并，但展示样本仍带「喵」时，API 返回应清理掉。"""
+    _seed_daily("好笑的梗喵", content_norm="好笑的梗", send_cnt=12, unique=3)
+    r = client.get("/api/live?window=day")
+    samples = [d["content_sample"] for d in r.json()["data"]]
+    assert "好笑的梗" in samples
+    assert "好笑的梗喵" not in samples
+
+
 def test_live_includes_first_sender(client):
     from datetime import datetime, timezone, timedelta
     from sqlalchemy import insert as sa_insert

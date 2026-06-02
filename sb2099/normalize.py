@@ -29,7 +29,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 
-__all__ = ["normalize"]
+__all__ = ["normalize", "strip_decorations"]
 
 
 _ZERO_WIDTH = {
@@ -110,6 +110,20 @@ def _strip_suffixes(s: str, suffixes: Sequence[str]) -> str:
                 s = s[: -len(suf)].rstrip()
                 changed = True
                 break
+    return s
+
+
+def strip_decorations(s: str, suffixes: Sequence[str] = (), cut_markers: Sequence[str] = ()) -> str:
+    """清理「展示用样本」：砍掉 douyuex 截断标记整条尾巴 + 裸尾缀词，
+    但保留 emoji / 重复段 / 大小写（不折叠、不做全半角归一），读起来自然。
+
+    与 `normalize()` 不同——后者是给去重/聚合用的规范键；本函数只为 UI 展示去掉
+    尾巴噪声。suffixes / cut_markers 应为规范形（调用方用 normalize() 处理过）。
+    """
+    if not s:
+        return ""
+    s = _apply_cut_markers(s.rstrip(), cut_markers)
+    s = _strip_suffixes(s, suffixes)
     return s
 
 
