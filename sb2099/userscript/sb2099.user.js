@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
 // @namespace    https://github.com/LEorEu/sb2099
-// @version      0.4.0
-// @description  在斗鱼 2099 房间（real id 12740109）的页面内嵌入烂梗投稿库面板，支持搜索/tag 筛选/本地收藏/单条复制+发送
+// @version      0.5.0
+// @description  在斗鱼 2099 房间页面内嵌入烂梗库面板：搜索 / 单条复制 / 一键发送，收藏夹可从主站导入
 // @author       sb2099.cn
 // @match        https://www.douyu.com/*
 // @match        https://www.douyu.com
@@ -23,12 +23,9 @@
   'use strict';
 
   // ---- 配置 ---------------------------------------------------------------
-  // 部署到公网后改这一行即可。
   const API_BASE = 'https://www.sb2099.cn';
-  const SCRIPT_VERSION = '0.4.0';
-  const STORAGE_KEY_FAVS = 'sb2099_favorites_v1';
-  const STORAGE_KEY_BLOCKED = 'sb2099_blocked_v1';
-  const STORAGE_KEY_PANEL_OPEN = 'sb2099_panel_open_v1';
+  const SCRIPT_VERSION = '0.5.0';
+  const STORAGE_KEY_FAVS = 'sb2099_favorites_v1'; // 与主站收藏夹同一 key/结构，可互通
 
   // ---- 工具：API 调用 -----------------------------------------------------
   function apiGet(path) {
@@ -39,19 +36,14 @@
           url: API_BASE + path,
           timeout: 8000,
           onload: (r) => {
-            try {
-              resolve(JSON.parse(r.responseText));
-            } catch (e) {
-              reject(new Error('bad json: ' + e));
-            }
+            try { resolve(JSON.parse(r.responseText)); }
+            catch (e) { reject(new Error('bad json: ' + e)); }
           },
-          onerror: (e) => reject(new Error('network error')),
+          onerror: () => reject(new Error('network error')),
           ontimeout: () => reject(new Error('timeout')),
         });
       } else {
-        fetch(API_BASE + path)
-          .then((r) => r.json())
-          .then(resolve, reject);
+        fetch(API_BASE + path).then((r) => r.json()).then(resolve, reject);
       }
     });
   }
@@ -91,9 +83,7 @@
       const raw = (typeof GM_getValue === 'function') ? GM_getValue(key, null) : localStorage.getItem(key);
       if (!raw) return fallback;
       return JSON.parse(raw);
-    } catch (_) {
-      return fallback;
-    }
+    } catch (_) { return fallback; }
   }
 
   function saveJSON(key, value) {
@@ -102,77 +92,62 @@
     else localStorage.setItem(key, s);
   }
 
-  // 收藏结构：{ groups: { name: [ids...] }, order: [name1, name2] }
+  // 收藏结构：{ groups: { name: [ids...] }, order: [name1, ...] }（与主站一致）
   function loadFavorites() {
     return loadJSON(STORAGE_KEY_FAVS, { groups: { '默认': [] }, order: ['默认'] });
   }
+  function saveFavorites(f) { saveJSON(STORAGE_KEY_FAVS, f); }
 
-  function saveFavorites(f) {
-    saveJSON(STORAGE_KEY_FAVS, f);
-  }
-
-  function loadBlocked() {
-    return new Set(loadJSON(STORAGE_KEY_BLOCKED, []));
-  }
-
-  function saveBlocked(set) {
-    saveJSON(STORAGE_KEY_BLOCKED, Array.from(set));
-  }
-
-  // ---- 复制 + 发送到斗鱼输入框 -------------------------------------------
+  // ---- 复制 ---------------------------------------------------------------
   async function copyToClipboard(text) {
-    if (typeof GM_setClipboard === 'function') {
-      GM_setClipboard(text, 'text');
-      return true;
-    }
+    if (typeof GM_setClipboard === 'function') { GM_setClipboard(text, 'text'); return true; }
     if (navigator.clipboard && window.isSecureContext) {
       try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
     }
     const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
     let ok = false;
     try { ok = document.execCommand('copy'); } catch (_) {}
     document.body.removeChild(ta);
     return ok;
   }
 
-  // 尝试多个 selector 找到斗鱼直播间的弹幕输入框
-  function findDouyuInput() {
-    const sels = [
-      'textarea.ChatSend-txt',
-      'textarea[placeholder*="发个弹幕"]',
-      'textarea[placeholder*="弹幕"]',
-      '.Barrage-input textarea',
-      '#js-barrage-input',
-      '.ChatSend textarea',
-    ];
-    for (const s of sels) {
-      const el = document.querySelector(s);
-      if (el) return el;
+  // ---- 发送到斗鱼弹幕框 ---------------------------------------------------
+  // 关键：斗鱼弹幕框是 .ChatSend-txt（contenteditable div，不是 textarea），且可能在 shadow DOM 里。
+  // 必须穿透 shadow DOM 查找，并用 innerText 赋值——这正是之前“未找到弹幕框”的原因。
+  function querySelectorDeep(selector, root) {
+    root = root || document;
+    const found = root.querySelector(selector);
+    if (found) return found;
+    const all = root.querySelectorAll('*');
+    for (const el of all) {
+      if (el.shadowRoot) {
+        const f = querySelectorDeep(selector, el.shadowRoot);
+        if (f) return f;
+      }
     }
     return null;
   }
 
-  function setReactInputValue(el, value) {
-    // React 控制的 input 直接 .value= 不会触发 onChange；用原生 setter + dispatch
-    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-    setter.call(el, value);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  function sendToDouyuChat(text) {
-    const el = findDouyuInput();
-    if (!el) return false;
-    el.focus();
-    setReactInputValue(el, text);
-    // 不自动按回车——避免封号风险，让主播自己 enter；只把内容塞进去
-    return true;
+  function fillDouyuInput(text) {
+    const input =
+      querySelectorDeep('.ChatSend-txt') ||
+      querySelectorDeep('textarea[placeholder*="弹幕"]') ||
+      querySelectorDeep('textarea[placeholder*="聊天"]');
+    if (!input) return null;
+    input.focus();
+    const tag = input.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') {
+      const proto = tag === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+      setter.call(input, text);
+    } else {
+      input.innerText = text; // contenteditable div
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return input;
   }
 
   // ---- toast --------------------------------------------------------------
@@ -193,38 +168,33 @@
 
   // ---- 状态 ---------------------------------------------------------------
   const state = {
-    tags: [],
-    selectedTags: new Set(),
     q: '',
-    sort: 'new', // new | hot
     page: 1,
     size: 20,
     activeTab: 'lib', // lib | fav
     activeFavGroup: '默认',
     libResult: { list: [], total: 0, last_page: true },
     favorites: loadFavorites(),
-    blocked: loadBlocked(),
   };
 
-  // ---- DOM 模板 -----------------------------------------------------------
+  // ---- 样式 ---------------------------------------------------------------
   const STYLE = `
-  /* 独立悬浮启动按钮：贴左侧竖直居中，和 sb6657（工具栏按钮 + 右上浮窗）完全错开 */
+  /* 悬浮启动按钮：贴右侧、偏下，竖排——避开 sb6657（聊天工具栏按钮 + 右上浮窗） */
   .sb2099-fab {
-    position: fixed; left: 0; top: 50%; transform: translateY(-50%);
-    padding: 9px 7px 9px 9px; border-radius: 0 10px 10px 0;
+    position: fixed; right: 0; top: 64%; transform: translateY(-50%);
+    padding: 9px 8px; border-radius: 10px 0 0 10px;
     background: #ff5d5d; color: #fff; font-weight: 800; font-size: 12px;
     letter-spacing: .5px; writing-mode: vertical-rl; text-orientation: mixed;
-    display: flex; align-items: center; gap: 4px;
     cursor: pointer; z-index: 2147483000;
-    box-shadow: 2px 2px 10px rgba(0,0,0,.3);
+    box-shadow: -2px 2px 10px rgba(0,0,0,.3);
     border: none; line-height: 1; opacity: .9;
   }
-  .sb2099-fab:hover { background: #ff3d3d; opacity: 1; padding-left: 12px; }
+  .sb2099-fab:hover { background: #ff3d3d; opacity: 1; padding-right: 11px; }
 
-  /* 浮动可拖拽小窗，而非满高抽屉——不再整列挡住聊天 */
+  /* 浮动可拖拽小窗：默认在右下角弹出，不挡聊天主区 */
   .sb2099-panel {
-    position: fixed; left: 16px; top: 84px;
-    width: 340px; max-width: 92vw; max-height: 72vh;
+    position: fixed; right: 14px; bottom: 64px;
+    width: 340px; max-width: 92vw; max-height: 70vh;
     background: #fff; color: #1a1a1a;
     border: 1px solid #e5e5e5; border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,.22);
@@ -242,10 +212,7 @@
   }
   .sb2099-head .title { font-weight: 600; font-size: 14px; flex: 1; }
   .sb2099-head .ver { color: #999; font-size: 11px; }
-  .sb2099-head .close {
-    background: transparent; border: none; cursor: pointer;
-    font-size: 18px; color: #666;
-  }
+  .sb2099-head .close { background: transparent; border: none; cursor: pointer; font-size: 18px; color: #666; }
 
   .sb2099-tabs { display: flex; border-bottom: 1px solid #eee; }
   .sb2099-tabs button {
@@ -256,75 +223,37 @@
 
   .sb2099-body { flex: 1; overflow-y: auto; padding: 10px 14px; }
 
-  .sb2099-filters input.q {
-    width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;
-    font-size: 13px; margin-bottom: 8px;
-  }
   .sb2099-filters .row { display: flex; gap: 6px; margin-bottom: 8px; }
-  .sb2099-filters select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
-  .sb2099-filters .clear { background: transparent; border: 1px solid #ddd; border-radius: 4px;
-    font-size: 12px; padding: 4px 8px; color: #666; cursor: pointer; }
-  .sb2099-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
-  .sb2099-tags .chip {
-    padding: 2px 8px; background: #f3f4f6; border-radius: 999px;
-    font-size: 12px; cursor: pointer; user-select: none;
-    border: 1px solid transparent;
-  }
-  .sb2099-tags .chip.active { background: #ff5252; color: #fff; border-color: #ff5252; }
+  .sb2099-filters input.q { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; min-width: 0; }
+  .sb2099-filters .sbtn { background: #4caf50; color: #fff; border: none; border-radius: 4px; font-size: 13px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
+  .sb2099-filters .clear { background: transparent; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; padding: 4px 8px; color: #666; cursor: pointer; white-space: nowrap; }
 
-  .sb2099-fav-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
-  .sb2099-fav-groups .gchip {
-    padding: 3px 8px; background: #f3f4f6; border-radius: 4px;
-    font-size: 12px; cursor: pointer; user-select: none;
-    border: 1px solid transparent;
-  }
+  .sb2099-fav-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .sb2099-fav-tools button { background: #ff5252; color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .sb2099-fav-tools .note { color: #999; font-size: 11px; }
+  .sb2099-fav-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .sb2099-fav-groups .gchip { padding: 3px 8px; background: #f3f4f6; border-radius: 4px; font-size: 12px; cursor: pointer; user-select: none; border: 1px solid transparent; }
   .sb2099-fav-groups .gchip.active { background: #ff5252; color: #fff; border-color: #ff5252; }
-  .sb2099-fav-tools {
-    display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;
-  }
-  .sb2099-fav-tools button {
-    background: transparent; border: 1px solid #ddd; border-radius: 4px;
-    padding: 3px 8px; font-size: 11px; cursor: pointer; color: #666;
-  }
 
   .sb2099-list { list-style: none; padding: 0; margin: 0; }
-  .sb2099-list li {
-    padding: 8px 0; border-bottom: 1px solid #f0f0f0;
-  }
-  .sb2099-list .content {
-    white-space: pre-wrap; word-break: break-word;
-    font-size: 13px; margin-bottom: 4px;
-  }
-  .sb2099-list .meta { font-size: 11px; color: #999; margin-bottom: 4px; }
-  .sb2099-list .meta > span { margin-right: 8px; }
-  .sb2099-list .actions { display: flex; gap: 4px; flex-wrap: wrap; }
-  .sb2099-list .actions button {
-    background: transparent; border: 1px solid #ddd; color: #666;
-    padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
-  }
-  .sb2099-list .actions button.primary { color: #ff5252; border-color: #ff5252; }
-  .sb2099-list .actions button.danger { color: #999; }
+  .sb2099-list li { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f0f0f0; }
+  .sb2099-list .content { flex: 1; white-space: pre-wrap; word-break: break-word; font-size: 13px; cursor: pointer; }
+  .sb2099-list li:hover .content { color: #ff5252; }
+  .sb2099-list .send { flex-shrink: 0; background: #ff5722; color: #fff; border: none; padding: 3px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+  .sb2099-list .send:hover { background: #f4511e; }
 
-  .sb2099-pager {
-    display: flex; justify-content: center; gap: 12px; padding: 12px 0;
-    color: #999; font-size: 12px;
-  }
-  .sb2099-pager button {
-    background: transparent; border: 1px solid #ddd; border-radius: 4px;
-    padding: 3px 12px; cursor: pointer; color: #666; font-size: 12px;
-  }
+  .sb2099-pager { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 12px 0; color: #999; font-size: 12px; }
+  .sb2099-pager button { background: transparent; border: 1px solid #ddd; border-radius: 4px; padding: 3px 12px; cursor: pointer; color: #666; font-size: 12px; }
   .sb2099-pager button:disabled { opacity: .4; cursor: not-allowed; }
 
-  .sb2099-empty { color: #999; padding: 20px 0; text-align: center; font-size: 12px; }
-  .sb2099-loading { color: #999; padding: 20px 0; text-align: center; font-size: 12px; }
+  .sb2099-empty, .sb2099-loading { color: #999; padding: 20px 0; text-align: center; font-size: 12px; }
 
   .sb2099-toast {
     position: fixed; left: 50%; bottom: 80px;
     transform: translateX(-50%) translateY(20px);
     padding: 6px 14px; border-radius: 4px; font-size: 13px;
     color: #fff; background: #333; opacity: 0;
-    transition: opacity .2s, transform .2s;
-    pointer-events: none; z-index: 1000000;
+    transition: opacity .2s, transform .2s; pointer-events: none; z-index: 2147483002;
   }
   .sb2099-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .sb2099-toast[data-kind="ok"] { background: #4caf50; }
@@ -342,9 +271,7 @@
     if (attrs) {
       for (const k in attrs) {
         if (k === 'class') e.className = attrs[k];
-        else if (k === 'on') {
-          for (const ev in attrs[k]) e.addEventListener(ev, attrs[k][ev]);
-        }
+        else if (k === 'on') { for (const ev in attrs[k]) e.addEventListener(ev, attrs[k][ev]); }
         else if (k === 'html') e.innerHTML = attrs[k];
         else if (k === 'style') Object.assign(e.style, attrs[k]);
         else e.setAttribute(k, attrs[k]);
@@ -361,7 +288,6 @@
   let $panel, $body;
 
   function renderRoot() {
-    // 独立悬浮启动按钮（左侧贴边），不蹭斗鱼工具栏，与 sb6657 互不打架。
     const fab = el('button', { class: 'sb2099-fab', title: 'sb2099 烂梗库（点击开/关）' }, ['🐹 sb2099']);
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
@@ -369,21 +295,14 @@
     $panel = el('div', { class: 'sb2099-panel' });
     document.body.appendChild($panel);
     refreshPanel();
-    enableDrag($panel);          // 头部拖拽，可把窗挪开聊天区
-    // 直接用内联 style 控制显隐——不依赖注入样式表里的 .open 规则（斗鱼页面更稳）
-    setPanelOpen(loadJSON(STORAGE_KEY_PANEL_OPEN, false));
+    enableDrag($panel);
+    setPanelOpen(false); // 进页面默认关闭，点悬浮按钮再显示
   }
 
-  function setPanelOpen(open) {
-    $panel.style.display = open ? 'flex' : 'none';
-    saveJSON(STORAGE_KEY_PANEL_OPEN, open);
-  }
+  function setPanelOpen(open) { $panel.style.display = open ? 'flex' : 'none'; }
+  function togglePanel() { setPanelOpen(getComputedStyle($panel).display === 'none'); }
 
-  function togglePanel() {
-    setPanelOpen(getComputedStyle($panel).display === 'none');
-  }
-
-  // 拖拽：按住标题栏移动整个面板（按钮上不触发，避免和关闭冲突）
+  // 拖拽：按住标题栏移动整个面板
   function enableDrag(panel) {
     let dragging = false, ox = 0, oy = 0;
     panel.addEventListener('pointerdown', (e) => {
@@ -393,6 +312,7 @@
       dragging = true;
       const r = panel.getBoundingClientRect();
       ox = e.clientX - r.left; oy = e.clientY - r.top;
+      panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
       panel.style.right = 'auto'; panel.style.bottom = 'auto';
       try { panel.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
@@ -414,11 +334,8 @@
     $panel.appendChild(renderTabs());
     $body = el('div', { class: 'sb2099-body' });
     $panel.appendChild($body);
-    if (state.activeTab === 'lib') {
-      renderLibBody();
-    } else {
-      renderFavBody();
-    }
+    if (state.activeTab === 'lib') renderLibBody();
+    else renderFavBody();
   }
 
   function renderHead() {
@@ -434,7 +351,7 @@
       el('button', {
         class: state.activeTab === 'lib' ? 'active' : '',
         on: { click: () => { state.activeTab = 'lib'; refreshPanel(); } },
-      }, ['投稿库']),
+      }, ['烂梗库']),
       el('button', {
         class: state.activeTab === 'fav' ? 'active' : '',
         on: { click: () => { state.activeTab = 'fav'; refreshPanel(); } },
@@ -446,28 +363,30 @@
     return Object.values(state.favorites.groups).reduce((acc, arr) => acc + arr.length, 0);
   }
 
-  // ---- 投稿库 tab ---------------------------------------------------------
+  // 单条：正文（点击复制）+ 发送
+  function renderItem(it) {
+    const li = el('li');
+    li.appendChild(el('div', {
+      class: 'content', title: '点击复制',
+      on: { click: () => doCopy(it) },
+    }, [it.content]));
+    li.appendChild(el('button', {
+      class: 'send',
+      on: { click: (e) => { e.stopPropagation(); doSend(it); } },
+    }, ['发送']));
+    return li;
+  }
+
+  // ---- 烂梗库 tab ---------------------------------------------------------
   async function renderLibBody() {
     $body.innerHTML = '';
     $body.appendChild(renderFilters());
-    if (state.tags.length === 0) {
-      try {
-        const r = await apiGet('/api/tags');
-        state.tags = r.data || [];
-      } catch (e) {
-        state.tags = [];
-      }
-    }
-    $body.appendChild(renderTagChips());
 
     const loader = el('div', { class: 'sb2099-loading' }, ['加载中…']);
     $body.appendChild(loader);
-
     try {
-      const path = '/api/barrage?'
-        + 'sort=' + state.sort
+      const path = '/api/barrage?sort=new'
         + (state.q ? '&q=' + encodeURIComponent(state.q) : '')
-        + (state.selectedTags.size ? '&tag=' + Array.from(state.selectedTags).join(',') : '')
         + '&page=' + state.page + '&size=' + state.size;
       const r = await apiGet(path);
       state.libResult = (r && r.data) || { list: [], total: 0, last_page: true };
@@ -477,84 +396,30 @@
     }
     loader.remove();
 
-    const items = state.libResult.list.filter((it) => !state.blocked.has(it.id));
+    const items = state.libResult.list || [];
     if (items.length === 0) {
       $body.appendChild(el('div', { class: 'sb2099-empty' }, ['空结果。']));
     } else {
       const ul = el('ul', { class: 'sb2099-list' });
-      items.forEach((it) => ul.appendChild(renderLibItem(it)));
+      items.forEach((it) => ul.appendChild(renderItem(it)));
       $body.appendChild(ul);
     }
-
     $body.appendChild(renderPager());
   }
 
   function renderFilters() {
     const wrap = el('div', { class: 'sb2099-filters' });
-    const input = el('input', { class: 'q', type: 'text', placeholder: '搜索内容…（FTS5）', value: state.q });
-    input.addEventListener('change', () => {
-      state.q = input.value.trim();
-      state.page = 1;
-      renderLibBody();
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { state.q = input.value.trim(); state.page = 1; renderLibBody(); }
-    });
-    wrap.appendChild(input);
-
     const row = el('div', { class: 'row' });
-    const sortSel = el('select', {}, [
-      el('option', { value: 'new' }, ['最新']),
-      el('option', { value: 'hot' }, ['最热']),
-    ]);
-    sortSel.value = state.sort;
-    sortSel.addEventListener('change', () => { state.sort = sortSel.value; state.page = 1; renderLibBody(); });
-    row.appendChild(sortSel);
-
-    const clear = el('button', { class: 'clear', on: { click: () => {
-      state.q = ''; state.selectedTags.clear(); state.page = 1; renderLibBody();
-    } } }, ['清空筛选']);
-    row.appendChild(clear);
+    const input = el('input', { class: 'q', type: 'text', placeholder: '搜索烂梗…', value: state.q });
+    const search = () => { state.q = input.value.trim(); state.page = 1; renderLibBody(); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+    row.appendChild(input);
+    row.appendChild(el('button', { class: 'sbtn', on: { click: search } }, ['搜索']));
+    row.appendChild(el('button', { class: 'clear', on: { click: () => {
+      state.q = ''; state.page = 1; renderLibBody();
+    } } }, ['清空筛选']));
     wrap.appendChild(row);
-
     return wrap;
-  }
-
-  function renderTagChips() {
-    const wrap = el('div', { class: 'sb2099-tags' });
-    state.tags.forEach((t) => {
-      const chip = el('span', {
-        class: 'chip' + (state.selectedTags.has(t.value) ? ' active' : ''),
-        on: { click: () => {
-          if (state.selectedTags.has(t.value)) state.selectedTags.delete(t.value);
-          else state.selectedTags.add(t.value);
-          state.page = 1;
-          renderLibBody();
-        } },
-      }, [t.label]);
-      wrap.appendChild(chip);
-    });
-    return wrap;
-  }
-
-  function renderLibItem(it) {
-    const li = el('li');
-    li.appendChild(el('div', { class: 'content' }, [it.content]));
-    li.appendChild(el('div', { class: 'meta' }, [
-      el('span', {}, ['#' + it.id]),
-      el('span', {}, ['tags: ' + (it.tags || '-')]),
-      el('span', {}, ['复制 ' + it.cnt]),
-    ]));
-    const actions = el('div', { class: 'actions' });
-
-    const copyBtn = el('button', { class: 'primary', on: { click: () => doCopy(it) } }, ['复制']);
-    const sendBtn = el('button', { on: { click: () => doSend(it) } }, ['发送']);
-    const favBtn = el('button', { on: { click: () => doFavorite(it) } }, ['收藏']);
-    const blockBtn = el('button', { class: 'danger', on: { click: () => doBlock(it) } }, ['屏蔽']);
-
-    [copyBtn, sendBtn, favBtn, blockBtn].forEach((b) => actions.appendChild(b));
-    li.appendChild(actions);
-    return li;
   }
 
   function renderPager() {
@@ -569,55 +434,54 @@
     return pager;
   }
 
-  // ---- 收藏 tab -----------------------------------------------------------
+  // ---- 收藏 tab（只读：导入 + 分组 + 列表，增删导出都回主站）---------------
   function renderFavBody() {
     $body.innerHTML = '';
-    $body.appendChild(renderFavGroups());
     $body.appendChild(renderFavTools());
+    $body.appendChild(renderFavGroups());
 
     const ids = state.favorites.groups[state.activeFavGroup] || [];
     if (ids.length === 0) {
-      $body.appendChild(el('div', { class: 'sb2099-empty' }, ['本分组还没有收藏。']));
+      $body.appendChild(el('div', { class: 'sb2099-empty' }, ['本分组还没有收藏，去主站收藏后「导出」再来这里「导入」。']));
       return;
     }
 
     const loader = el('div', { class: 'sb2099-loading' }, ['加载中…']);
     $body.appendChild(loader);
-
-    // 收藏条目走 /api/barrage 反查（按 id 拉一次再 client-side 过滤）。
-    // 简化策略：限 ids 数量上限，超过时只拉前 100 个；后续可加 /api/barrage/by_ids 端点。
-    fetchFavoriteEntries(ids.slice(0, 100)).then((items) => {
+    fetchFavoriteEntries(ids).then((items) => {
       loader.remove();
+      if (items.length === 0) {
+        $body.appendChild(el('div', { class: 'sb2099-empty' }, ['没取到内容（可能已下架）']));
+        return;
+      }
       const ul = el('ul', { class: 'sb2099-list' });
-      items.forEach((it) => ul.appendChild(renderFavItem(it)));
+      items.forEach((it) => ul.appendChild(renderItem(it)));
       $body.appendChild(ul);
-    }).catch((e) => {
+    }).catch(() => {
       loader.remove();
       $body.appendChild(el('div', { class: 'sb2099-empty' }, ['加载失败']));
     });
   }
 
-  async function fetchFavoriteEntries(ids) {
-    if (ids.length === 0) return [];
-    // 取大列表的前几页直到把所有 id 都拼齐；最坏情况翻 5 页（500 条）
-    const wanted = new Set(ids);
-    const found = new Map();
-    let page = 1;
-    while (wanted.size > 0 && page <= 5) {
-      const r = await apiGet('/api/barrage?sort=new&page=' + page + '&size=100');
-      const list = ((r && r.data) || {}).list || [];
-      if (list.length === 0) break;
-      list.forEach((it) => {
-        if (wanted.has(it.id)) {
-          found.set(it.id, it);
-          wanted.delete(it.id);
-        }
-      });
-      if ((r.data || {}).last_page) break;
-      page++;
-    }
-    // 按 ids 原顺序返回
-    return ids.map((id) => found.get(id)).filter(Boolean);
+  function renderFavTools() {
+    const wrap = el('div', { class: 'sb2099-fav-tools' });
+    wrap.appendChild(el('button', { on: { click: () => {
+      const text = prompt('粘贴主站收藏夹「导出」的 JSON：');
+      if (!text) return;
+      try {
+        const data = JSON.parse(text);
+        if (!data.groups || !data.order) throw new Error('bad structure');
+        state.favorites = data;
+        saveFavorites(data);
+        state.activeFavGroup = data.order[0] || '默认';
+        refreshPanel();
+        toast('导入完成', true);
+      } catch (e) {
+        toast('JSON 解析失败', false);
+      }
+    } } }, ['⬇ 从主站导入']));
+    wrap.appendChild(el('span', { class: 'note' }, ['新建/移动/导出请到主站收藏夹']));
+    return wrap;
   }
 
   function renderFavGroups() {
@@ -632,150 +496,46 @@
     return wrap;
   }
 
-  function renderFavTools() {
-    const wrap = el('div', { class: 'sb2099-fav-tools' });
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      const name = prompt('新分组名称：');
-      if (!name) return;
-      if (state.favorites.groups[name]) { toast('分组已存在', false); return; }
-      state.favorites.groups[name] = [];
-      state.favorites.order.push(name);
-      saveFavorites(state.favorites);
-      state.activeFavGroup = name;
-      renderFavBody();
-    } } }, ['+ 新分组']));
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      const newName = prompt('重命名为：', state.activeFavGroup);
-      if (!newName || newName === state.activeFavGroup) return;
-      if (state.favorites.groups[newName]) { toast('分组已存在', false); return; }
-      state.favorites.groups[newName] = state.favorites.groups[state.activeFavGroup];
-      delete state.favorites.groups[state.activeFavGroup];
-      state.favorites.order = state.favorites.order.map((x) => x === state.activeFavGroup ? newName : x);
-      state.activeFavGroup = newName;
-      saveFavorites(state.favorites);
-      renderFavBody();
-    } } }, ['重命名']));
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      if (state.favorites.order.length <= 1) { toast('至少保留一个分组', false); return; }
-      if (!confirm('删除分组「' + state.activeFavGroup + '」?')) return;
-      delete state.favorites.groups[state.activeFavGroup];
-      state.favorites.order = state.favorites.order.filter((x) => x !== state.activeFavGroup);
-      state.activeFavGroup = state.favorites.order[0];
-      saveFavorites(state.favorites);
-      renderFavBody();
-    } } }, ['删除']));
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      const text = JSON.stringify(state.favorites, null, 2);
-      copyToClipboard(text);
-      toast('已复制到剪贴板', true);
-    } } }, ['导出']));
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      const text = prompt('粘贴收藏 JSON：');
-      if (!text) return;
-      try {
-        const data = JSON.parse(text);
-        if (!data.groups || !data.order) throw new Error('bad structure');
-        state.favorites = data;
-        saveFavorites(state.favorites);
-        state.activeFavGroup = state.favorites.order[0];
-        renderFavBody();
-        toast('导入完成', true);
-      } catch (e) {
-        toast('JSON 解析失败', false);
-      }
-    } } }, ['导入']));
-
-    wrap.appendChild(el('button', { on: { click: () => {
-      if (state.blocked.size === 0) { toast('没有屏蔽条目', false); return; }
-      if (!confirm('恢复全部 ' + state.blocked.size + ' 个屏蔽条目？')) return;
-      state.blocked.clear();
-      saveBlocked(state.blocked);
-      toast('已恢复', true);
-      refreshPanel();
-    } } }, ['恢复屏蔽(' + state.blocked.size + ')']));
-
-    return wrap;
-  }
-
-  function renderFavItem(it) {
-    const li = el('li');
-    li.appendChild(el('div', { class: 'content' }, [it.content]));
-    li.appendChild(el('div', { class: 'meta' }, [
-      el('span', {}, ['#' + it.id]),
-      el('span', {}, ['tags: ' + (it.tags || '-')]),
-    ]));
-    const actions = el('div', { class: 'actions' });
-    actions.appendChild(el('button', { class: 'primary', on: { click: () => doCopy(it) } }, ['复制']));
-    actions.appendChild(el('button', { on: { click: () => doSend(it) } }, ['发送']));
-    actions.appendChild(el('button', { class: 'danger', on: { click: () => {
-      const group = state.favorites.groups[state.activeFavGroup];
-      const idx = group.indexOf(it.id);
-      if (idx >= 0) { group.splice(idx, 1); saveFavorites(state.favorites); renderFavBody(); refreshTabsCount(); }
-    } } }, ['移出']));
-    li.appendChild(actions);
-    return li;
-  }
-
-  function refreshTabsCount() {
-    // 简单做法：整个面板 refresh
-    refreshPanel();
+  async function fetchFavoriteEntries(ids) {
+    if (!ids.length) return [];
+    try {
+      const r = await apiGet('/api/barrage/by-ids?ids=' + ids.join(','));
+      const list = (r && r.data) || [];
+      const map = new Map(list.map((it) => [it.id, it]));
+      return ids.map((id) => map.get(id)).filter(Boolean);
+    } catch (_) {
+      return [];
+    }
   }
 
   // ---- 动作 ---------------------------------------------------------------
   async function doCopy(it) {
     const ok = await copyToClipboard(it.content);
-    if (!ok) { toast('复制失败', false); return; }
-    toast('已复制', true);
-    // fire and forget
-    apiPost('/api/copy', { source: 'barrage', id: it.id }).catch(() => {});
+    toast(ok ? '已复制' : '复制失败', ok);
+    if (ok) apiPost('/api/copy', { source: 'barrage', id: it.id }).catch(() => {});
   }
 
+  let _sendCd = false;
   async function doSend(it) {
-    const okClip = await copyToClipboard(it.content);
-    const okSet = sendToDouyuChat(it.content);
-    if (okSet) {
-      toast('已填入弹幕框，按回车发送', true);
-    } else if (okClip) {
-      toast('未找到弹幕框，已复制到剪贴板', true);
-    } else {
-      toast('发送失败', false);
+    if (_sendCd) { toast('发送冷却中，稍等几秒', false); return; }
+    const input = fillDouyuInput(it.content);
+    if (!input) {
+      const ok = await copyToClipboard(it.content);
+      toast(ok ? '未找到弹幕框，已复制到剪贴板' : '未找到弹幕框', false);
       return;
     }
-    apiPost('/api/copy', { source: 'barrage', id: it.id }).catch(() => {});
-  }
-
-  function doFavorite(it) {
-    const groups = state.favorites.order;
-    let target = state.activeFavGroup;
-    if (groups.length > 1) {
-      const choice = prompt('收藏到哪个分组？\n' + groups.map((g, i) => (i + 1) + '. ' + g).join('\n') + '\n回车默认 = "' + target + '"');
-      if (choice && choice.trim()) {
-        const n = parseInt(choice, 10);
-        if (n >= 1 && n <= groups.length) target = groups[n - 1];
-        else if (groups.includes(choice.trim())) target = choice.trim();
-      }
-    }
-    const arr = state.favorites.groups[target];
-    if (!arr.includes(it.id)) {
-      arr.push(it.id);
-      saveFavorites(state.favorites);
-      toast('已收藏到「' + target + '」', true);
+    const sendBtn = querySelectorDeep('.ChatSend-button');
+    if (sendBtn) {
+      _sendCd = true;
+      setTimeout(() => {
+        sendBtn.click();
+        toast('已发送', true);
+        setTimeout(() => { _sendCd = false; }, 5000); // 防刷屏冷却
+      }, 60);
     } else {
-      toast('已经在「' + target + '」', false);
+      toast('已填入弹幕框，按回车发送', true);
     }
-    refreshTabsCount();
-  }
-
-  function doBlock(it) {
-    state.blocked.add(it.id);
-    saveBlocked(state.blocked);
-    toast('已屏蔽 #' + it.id, true);
-    renderLibBody();
+    apiPost('/api/copy', { source: 'barrage', id: it.id }).catch(() => {});
   }
 
   // ---- 启动 ---------------------------------------------------------------
@@ -783,7 +543,6 @@
     if (document.getElementById('sb2099-toast') || document.querySelector('.sb2099-fab')) return; // 防重复
     injectStyle();
     renderRoot();
-    // 启动时检查脚本版本（提示更新）
     apiGet('/api/userscript/version').then((r) => {
       const remote = (r && r.version) || null;
       if (remote && remote !== SCRIPT_VERSION) {
