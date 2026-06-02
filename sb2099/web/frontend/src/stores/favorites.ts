@@ -36,6 +36,13 @@ export const useFavoritesStore = defineStore('favorites', {
       const arr = this.groups[group]; if (!arr) return
       const i = arr.indexOf(id); if (i >= 0) { arr.splice(i, 1); this.persist() }
     },
+    removeEverywhere(id: number) {
+      let hit = false
+      for (const g of Object.values(this.groups)) {
+        const i = g.indexOf(id); if (i >= 0) { g.splice(i, 1); hit = true }
+      }
+      if (hit) this.persist()
+    },
     exportJson(): string { return JSON.stringify({ groups: this.groups, order: this.order }) },
     importJson(raw: string): boolean {
       try {

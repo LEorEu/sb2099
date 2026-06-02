@@ -5,6 +5,7 @@ import MemeRow from '../MemeRow.vue'
 import { useTagsStore } from '@/stores/tags'
 
 beforeEach(() => {
+  localStorage.clear()
   setActivePinia(createPinia())
   const s = useTagsStore(); s.loaded = true
   s.list = [{ value: '00', label: '主播梗', icon_url: null, sort: 1 }]
@@ -27,4 +28,13 @@ test('favorite toggles store', async () => {
   await w.get('[data-test=fav]').trigger('click')
   const { useFavoritesStore } = await import('@/stores/favorites')
   expect(useFavoritesStore().has(1)).toBe(true)
+})
+
+test('clicking favorite again removes it', async () => {
+  const w = mount(MemeRow, { props: { item } })
+  const { useFavoritesStore } = await import('@/stores/favorites')
+  await w.get('[data-test=fav]').trigger('click')
+  expect(useFavoritesStore().has(1)).toBe(true)
+  await w.get('[data-test=fav]').trigger('click')
+  expect(useFavoritesStore().has(1)).toBe(false)
 })

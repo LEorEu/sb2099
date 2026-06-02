@@ -10,7 +10,7 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
 <template>
   <section class="app-wrap home">
     <div class="hero">
-      <span class="kicker">斗鱼 2099 · 一团肉松子直播间</span>
+      <a class="kicker" href="https://www.douyu.com/2099" target="_blank" rel="noopener">斗鱼 2099 · 一团肉松子直播间 ↗</a>
       <h1><span class="mark">团松子</span>烂梗收集站</h1>
       <p class="sub">家人们听到的好笑弹幕都丢这儿 · 回直播间 <b>搜一下就能一键发</b></p>
     </div>
@@ -30,7 +30,8 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
 <style scoped>
 .home{padding:40px 20px 60px}
 .hero{text-align:center;margin-bottom:30px}
-.kicker{display:inline-block;font-size:13px;font-weight:800;color:var(--accent);background:var(--accent-soft);padding:5px 12px;border-radius:999px}
+.kicker{display:inline-block;font-size:13px;font-weight:800;color:var(--accent);background:var(--accent-soft);padding:5px 12px;border-radius:999px;text-decoration:none;transition:background .15s}
+.kicker:hover{background:var(--accent);color:#fff}
 .hero h1{font-size:40px;font-weight:900;margin-top:15px;line-height:1.12}
 .mark{background:linear-gradient(transparent 60%,var(--accent-soft) 60%);padding:0 6px}
 .sub{color:var(--muted);font-size:15px;margin-top:13px}

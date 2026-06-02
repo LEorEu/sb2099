@@ -17,7 +17,7 @@ const date = computed(() => (props.item.submit_time || '').slice(5, 10))
 
 function onCopy() { copy(props.item.content, 'barrage', props.item.id) }
 function onFav() {
-  if (faved.value) toast.push('已在收藏里了')
+  if (faved.value) { favs.removeEverywhere(props.item.id); toast.push('已移出收藏夹') }
   else { favs.add(props.item.id); toast.push('收进默认收藏夹 ⭐') }
 }
 function onReport() {
@@ -38,7 +38,7 @@ function onAddTag() { toast.push('补标签功能马上来（投票/提议）') 
     </div>
     <div class="acts">
       <button class="copy" data-test="copy" @click="onCopy">复制</button>
-      <button class="ic2" data-test="fav" :class="{ on: faved }" @click="onFav">{{ faved ? '♥' : '♡' }}</button>
+      <button class="ic2" data-test="fav" :class="{ on: faved }" :title="faved ? '点击取消收藏' : '收藏'" @click="onFav">{{ faved ? '♥' : '♡' }}</button>
       <ActionPopover>
         <button data-test="addtag" @click="onAddTag">🏷️ 补个标签</button>
         <button class="warn" data-test="report" @click="onReport">🚩 这条不合适</button>
@@ -55,6 +55,6 @@ function onAddTag() { toast.push('补标签功能马上来（投票/提议）') 
 .sub{font-size:12px;color:var(--subtle)}
 .acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 .copy{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-weight:800;font-size:13px;cursor:pointer}
-.ic2{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;cursor:pointer}
+.ic2{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:9px;width:38px;height:38px;padding:0;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-variant-emoji:text}
 .ic2.on{color:var(--accent);border-color:var(--accent)}
 </style>
