@@ -18,8 +18,8 @@ async function submit() {
   err.value = ''
   try {
     await store.login(token.value)
-    const next = (route.query.next as string) || '/admin/settings'
-    router.replace(next.startsWith('/admin') ? next : '/admin/settings')
+    const next = (route.query.next as string) || '/admin'
+    router.replace(next.startsWith('/admin') ? next : '/admin')
   } catch (e) {
     err.value = e instanceof ApiError ? e.message : '登录失败'
   } finally {

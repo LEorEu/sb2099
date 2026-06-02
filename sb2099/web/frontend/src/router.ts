@@ -17,7 +17,7 @@ export const router = createRouter({
       path: '/admin', component: () => import('@/views/admin/AdminLayout.vue'),
       meta: { admin: true },
       children: [
-        { path: '', redirect: '/admin/settings' },
+        { path: '', name: 'admin-dashboard', component: () => import('@/views/admin/AdminDashboard.vue') },
         { path: 'settings', name: 'admin-settings', component: () => import('@/views/admin/AdminSettings.vue') },
         { path: 'tags', name: 'admin-tags', component: () => import('@/views/admin/AdminTags.vue') },
         { path: 'barrage', name: 'admin-barrage', component: () => import('@/views/admin/AdminBarrage.vue') },
@@ -41,7 +41,7 @@ router.beforeEach(async (to) => {
   const store = useAdminStore()
   const authed = store.checked ? store.authed : await store.check()
   if (to.meta.public) {
-    return authed ? { name: 'admin-settings' } : true
+    return authed ? { name: 'admin-dashboard' } : true
   }
   return authed ? true : { name: 'admin-login', query: { next: to.fullPath } }
 })

@@ -43,7 +43,7 @@ onMounted(load)
 </script>
 <template>
   <div class="adm-head">
-    <h1>直播热门</h1>
+    <h1>直播热榜</h1>
     <span class="sub">由原始弹幕按直播日聚合；可查看明细、重算或重归一化</span>
   </div>
 

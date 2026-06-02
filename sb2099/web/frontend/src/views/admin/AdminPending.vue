@@ -3,9 +3,11 @@ import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import type { AdminPendingItem } from '@/api/types'
 import { useToast } from '@/composables/useToast'
+import { useAdminStore } from '@/stores/admin'
 import { cst } from '@/composables/useCst'
 
 const toast = useToast()
+const store = useAdminStore()
 const items = ref<AdminPendingItem[]>([])
 const loading = ref(true)
 const tagEdits = reactive<Record<number, string>>({})
@@ -15,6 +17,7 @@ async function load() {
   try {
     items.value = await api.admin.getPending()
     for (const it of items.value) tagEdits[it.id] = it.tags
+    store.loadSummary()
   } finally {
     loading.value = false
   }
@@ -42,7 +45,7 @@ onMounted(load)
 </script>
 <template>
   <div class="adm-head">
-    <h1>投稿待审</h1>
+    <h1>待审稿件</h1>
     <span class="sub">命中违禁词或反作弊规则的投稿在此人工复核</span>
   </div>
 

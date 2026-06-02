@@ -496,6 +496,25 @@ def purge_trash_admin(barrage_id: int, _: str = Depends(require_admin)) -> dict:
     return {"ok": True}
 
 
+# ---- summary（工作台待办摘要）--------------------------------------------
+
+
+@router.get("/summary")
+def summary_admin(_: str = Depends(require_admin)) -> dict:
+    """轻量待办摘要：给工作台卡片与导航角标用（待审数 / 待处理举报 / 烂梗库总数）。"""
+    with _db.SessionLocal() as s:
+        pending = s.execute(
+            select(func.count(Barrage.id)).where(Barrage.status == "pending")
+        ).scalar_one()
+        open_reports = s.execute(
+            select(func.count(Barrage.id)).where(Barrage.report_cnt > 0)
+        ).scalar_one()
+        library_total = s.execute(
+            select(func.count(Barrage.id)).where(Barrage.status == "active")
+        ).scalar_one()
+    return {"pending": pending, "open_reports": open_reports, "library_total": library_total}
+
+
 # ---- live_hot -------------------------------------------------------------
 
 

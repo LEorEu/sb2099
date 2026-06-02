@@ -275,6 +275,28 @@ def test_barrage_endpoints_require_login(client):
     assert client.post("/api/admin/barrage/1/delete").status_code == 401
 
 
+# ---- summary --------------------------------------------------------------
+
+
+def test_summary_counts(admin_client):
+    _make_barrage("pending", "待办1")
+    _make_barrage("active", "在库1")
+    d = _make_barrage("active", "被举报")
+    with _db.SessionLocal() as s:
+        s.get(Barrage, d).report_cnt = 1
+        s.commit()
+    r = admin_client.get("/api/admin/summary")
+    assert r.status_code == 200
+    b = r.json()
+    assert b["pending"] >= 1
+    assert b["open_reports"] >= 1
+    assert b["library_total"] >= 2
+
+
+def test_summary_requires_login(client):
+    assert client.get("/api/admin/summary").status_code == 401
+
+
 # ---- trash ----------------------------------------------------------------
 
 

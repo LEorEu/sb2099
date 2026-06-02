@@ -108,5 +108,6 @@ export const api = {
     rescanLiveHot: () => req<{ ok: boolean }>('/api/admin/live-hot/rescan', { method: 'POST' }),
 
     getStats: () => req<AdminStats>('/api/admin/stats'),
+    getSummary: () => req<{ pending: number; open_reports: number; library_total: number }>('/api/admin/summary'),
   },
 }

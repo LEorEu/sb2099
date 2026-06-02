@@ -22,7 +22,7 @@ const cards = (d: AdminStats) => [
 </script>
 <template>
   <div class="adm-head">
-    <h1>统计概览</h1>
+    <h1>数据概览</h1>
     <span class="sub">近 24 小时运营数据</span>
   </div>
 

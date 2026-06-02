@@ -3,15 +3,20 @@ import { onMounted, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import type { AdminReportItem } from '@/api/types'
 import { useToast } from '@/composables/useToast'
+import { useAdminStore } from '@/stores/admin'
 import { cst } from '@/composables/useCst'
 
 const toast = useToast()
+const store = useAdminStore()
 const items = ref<AdminReportItem[]>([])
 const loading = ref(true)
 
 async function load() {
   loading.value = true
-  try { items.value = await api.admin.getReports() } finally { loading.value = false }
+  try {
+    items.value = await api.admin.getReports()
+    store.loadSummary()
+  } finally { loading.value = false }
 }
 
 async function dismiss(it: AdminReportItem) {
@@ -36,8 +41,8 @@ onMounted(load)
 </script>
 <template>
   <div class="adm-head">
-    <h1>被反馈的投稿</h1>
-    <span class="sub">观众点了「这条不合适」的条目，按反馈数排序</span>
+    <h1>举报处理</h1>
+    <span class="sub">观众点了「这条不合适」的条目，按举报数排序。属实就下架，没问题就忽略。</span>
   </div>
 
   <div v-if="loading" class="adm-empty">加载中…</div>
