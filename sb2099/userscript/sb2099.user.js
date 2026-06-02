@@ -1,14 +1,13 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
 // @namespace    https://github.com/LEorEu/sb2099
-// @version      0.3.0
+// @version      0.4.0
 // @description  在斗鱼 2099 房间（real id 12740109）的页面内嵌入烂梗投稿库面板，支持搜索/tag 筛选/本地收藏/单条复制+发送
-// @author       Eu
-// @match        https://www.douyu.com/2099
-// @match        https://www.douyu.com/2099?*
-// @match        https://www.douyu.com/12740109
-// @match        https://www.douyu.com/12740109?*
-// @match        https://www.douyu.com/topic/*
+// @author       sb2099.cn
+// @match        https://www.douyu.com/*
+// @match        https://www.douyu.com
+// @match        https://www.douyu.com/room/*
+// @include      https://*.douyu.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setClipboard
 // @grant        GM_getValue
@@ -26,7 +25,7 @@
   // ---- 配置 ---------------------------------------------------------------
   // 部署到公网后改这一行即可。
   const API_BASE = 'https://www.sb2099.cn';
-  const SCRIPT_VERSION = '0.3.0';
+  const SCRIPT_VERSION = '0.4.0';
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1';
   const STORAGE_KEY_BLOCKED = 'sb2099_blocked_v1';
   const STORAGE_KEY_PANEL_OPEN = 'sb2099_panel_open_v1';
@@ -209,16 +208,18 @@
 
   // ---- DOM 模板 -----------------------------------------------------------
   const STYLE = `
+  /* 独立悬浮启动按钮：贴左侧竖直居中，和 sb6657（工具栏按钮 + 右上浮窗）完全错开 */
   .sb2099-fab {
-    position: fixed; left: 16px; bottom: 84px;
-    width: 40px; height: 40px; border-radius: 50%;
-    background: #ff5d5d; color: #fff; font-weight: 700; font-size: 13px;
-    display: flex; align-items: center; justify-content: center;
+    position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+    padding: 9px 7px 9px 9px; border-radius: 0 10px 10px 0;
+    background: #ff5d5d; color: #fff; font-weight: 800; font-size: 12px;
+    letter-spacing: .5px; writing-mode: vertical-rl; text-orientation: mixed;
+    display: flex; align-items: center; gap: 4px;
     cursor: pointer; z-index: 2147483000;
-    box-shadow: 0 4px 12px rgba(0,0,0,.3);
-    border: none; line-height: 1; opacity: .92;
+    box-shadow: 2px 2px 10px rgba(0,0,0,.3);
+    border: none; line-height: 1; opacity: .9;
   }
-  .sb2099-fab:hover { background: #ff3d3d; opacity: 1; }
+  .sb2099-fab:hover { background: #ff3d3d; opacity: 1; padding-left: 12px; }
 
   /* 浮动可拖拽小窗，而非满高抽屉——不再整列挡住聊天 */
   .sb2099-panel {
@@ -231,7 +232,6 @@
     display: none; flex-direction: column; overflow: hidden;
     font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   }
-  .sb2099-panel.open { display: flex; }
   .sb2099-panel * { box-sizing: border-box; }
 
   .sb2099-head {
@@ -240,13 +240,6 @@
     cursor: move; user-select: none; background: #fafafa;
     border-radius: 12px 12px 0 0;
   }
-  /* 注入到斗鱼聊天工具栏的常驻开关 */
-  .sb2099-tbtn {
-    font-size: 13px; height: 26px; padding: 0 10px; margin-right: 14px;
-    background: #ff5d23; color: #fff; border: none; border-radius: 5px;
-    cursor: pointer; line-height: 26px;
-  }
-  .sb2099-tbtn:hover { background: #ff4500; }
   .sb2099-head .title { font-weight: 600; font-size: 14px; flex: 1; }
   .sb2099-head .ver { color: #999; font-size: 11px; }
   .sb2099-head .close {
@@ -368,40 +361,26 @@
   let $panel, $body;
 
   function renderRoot() {
-    const fab = el('button', { class: 'sb2099-fab', title: 'sb2099 烂梗库（点开/关）' }, ['梗']);
+    // 独立悬浮启动按钮（左侧贴边），不蹭斗鱼工具栏，与 sb6657 互不打架。
+    const fab = el('button', { class: 'sb2099-fab', title: 'sb2099 烂梗库（点击开/关）' }, ['🐹 sb2099']);
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
     $panel = el('div', { class: 'sb2099-panel' });
     document.body.appendChild($panel);
-    if (loadJSON(STORAGE_KEY_PANEL_OPEN, false)) {
-      $panel.classList.add('open');
-    }
     refreshPanel();
     enableDrag($panel);          // 头部拖拽，可把窗挪开聊天区
-    startToolbarButton();        // 往斗鱼聊天工具栏注入常驻「烂梗」开关
+    // 直接用内联 style 控制显隐——不依赖注入样式表里的 .open 规则（斗鱼页面更稳）
+    setPanelOpen(loadJSON(STORAGE_KEY_PANEL_OPEN, false));
   }
 
-  function togglePanel() {
-    const open = $panel.classList.toggle('open');
+  function setPanelOpen(open) {
+    $panel.style.display = open ? 'flex' : 'none';
     saveJSON(STORAGE_KEY_PANEL_OPEN, open);
   }
 
-  // 把开关按钮注入到斗鱼聊天工具栏，并定时补注入——这样刷新 / 斗鱼 SPA 重渲染后
-  // 开关都还在，不会出现「关掉就再也找不到」。面板默认隐藏，点开关才显示。
-  function startToolbarButton() {
-    function inject() {
-      const bar = document.querySelector('.ChatToolBar__right')
-        || document.querySelector('.ChatToolBar-right')
-        || document.querySelector('.ChatToolBar__left');
-      if (bar && !bar.querySelector('#sb2099-tbtn')) {
-        const btn = el('button', { id: 'sb2099-tbtn', class: 'sb2099-tbtn', title: 'sb2099 烂梗库' }, ['🐹 烂梗']);
-        btn.addEventListener('click', togglePanel);
-        bar.insertBefore(btn, bar.firstChild);
-      }
-    }
-    inject();
-    setInterval(inject, 2000);
+  function togglePanel() {
+    setPanelOpen(getComputedStyle($panel).display === 'none');
   }
 
   // 拖拽：按住标题栏移动整个面板（按钮上不触发，避免和关闭冲突）
