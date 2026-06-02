@@ -46,5 +46,5 @@ test('proposing a new tag POSTs to propose-tag', async () => {
   expect(fetchSpy.mock.calls[0][0]).toBe('/api/barrage/5/propose-tag')
   const body = JSON.parse((fetchSpy.mock.calls[0][1] as any).body)
   expect(body.label).toBe('CP 名场面')
-  expect(body.value).toMatch(/^[0-9A-Za-z]{1,8}$/) // 自动生成的内部值
+  expect(body.value).toBeUndefined() // value 由服务端按 label 去重后生成，前端不再传
 })

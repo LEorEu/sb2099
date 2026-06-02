@@ -82,12 +82,12 @@ onMounted(load)
     <!-- 候选标签 -->
     <div v-if="pending.length" class="adm-card">
       <h2 class="sec">观众提议待审 <span class="adm-badge warn">{{ pending.length }}</span></h2>
+      <p class="sechint">按标签名去重：同一个名字被多人/多条提议会累加到同一行，票数/关联即真实热度。</p>
       <table class="adm-table">
-        <thead><tr><th>value</th><th>名称</th><th>提议人</th><th class="num">票数 / 关联</th><th>提议时间</th><th></th></tr></thead>
+        <thead><tr><th>标签名</th><th>提议人</th><th class="num">提议票 / 关联弹幕</th><th>首次提议</th><th></th></tr></thead>
         <tbody>
           <tr v-for="t in pending" :key="t.value">
-            <td class="adm-mono">{{ t.value }}</td>
-            <td>{{ t.label }}</td>
+            <td class="name">{{ t.label }}</td>
             <td>{{ t.proposer_nick || t.proposer_uid || '—' }}</td>
             <td class="num">{{ t.pending?.vote_count ?? 0 }} 票 / {{ t.pending?.barrage_count ?? 0 }} 条</td>
             <td>{{ cst(t.proposed_at) }}</td>
@@ -136,6 +136,8 @@ onMounted(load)
 </template>
 <style scoped>
 .sec { font-size: 15px; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.sechint { font-size: 12px; color: var(--subtle); margin: -6px 0 12px; }
+.name { font-weight: 700; }
 .adm-input.sm { height: 30px; padding: 4px 8px; }
 .w60 { width: 64px; } .w80 { width: 90px; }
 .ops { display: flex; gap: 6px; }

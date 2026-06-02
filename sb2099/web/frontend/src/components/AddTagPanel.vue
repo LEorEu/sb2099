@@ -15,9 +15,6 @@ const toast = useToast()
 const busy = ref(false)
 const newLabel = ref('')
 
-// 后端标签需要一个 1-8 位字母数字的内部值；对用户隐藏，自动生成。
-function genValue(): string { return 'u' + Math.random().toString(36).slice(2, 8) }
-
 const have = computed(() => new Set((props.item.tags || '').split(',').map(s => s.trim()).filter(Boolean)))
 const candidates = computed(() => tags.list.filter(t => !have.value.has(t.value)))
 const uid = () => ident.me?.uid ?? null
@@ -41,7 +38,7 @@ async function propose() {
   if (l.length > 32) { toast.push('标签名太长了（≤32 字）', 'warn'); return }
   busy.value = true
   try {
-    const r = await api.proposeTag(props.item.id, genValue(), l, uid())
+    const r = await api.proposeTag(props.item.id, l, uid())
     toast.push(`提议「${l}」已提交，达 ${r.threshold} 票后由管理员审核生效 🙌`, 'ok')
     newLabel.value = ''
   } catch (e) {

@@ -163,24 +163,26 @@ def test_tags_create_duplicate_409(admin_client):
 
 def test_tags_list_includes_pending_stats(admin_client):
     bid = _make_barrage("active", "t", "00")
-    r = admin_client.post(f"/api/barrage/{bid}/propose-tag",
-                          json={"value": "abc", "label": "新分类"})
+    r = admin_client.post(f"/api/barrage/{bid}/propose-tag", json={"label": "新分类"})
     assert r.status_code == 201
+    value = r.json()["data"]["tag"]  # 服务端生成的内部 value
     r = admin_client.get("/api/admin/tags")
     assert r.status_code == 200
     by_val = {t["value"]: t for t in r.json()["tags"]}
-    assert by_val["abc"]["enabled"] is False
-    assert by_val["abc"]["pending"]["vote_count"] >= 1
+    assert by_val[value]["label"] == "新分类"
+    assert by_val[value]["enabled"] is False
+    assert by_val[value]["pending"]["vote_count"] >= 1
     assert "vote_threshold" in r.json()
 
 
 def test_tags_approve_enables(admin_client):
     bid = _make_barrage("active", "t", "00")
-    admin_client.post(f"/api/barrage/{bid}/propose-tag", json={"value": "xyz", "label": "L"})
-    r = admin_client.post("/api/admin/tags/xyz/approve")
+    r = admin_client.post(f"/api/barrage/{bid}/propose-tag", json={"label": "L"})
+    value = r.json()["data"]["tag"]
+    r = admin_client.post(f"/api/admin/tags/{value}/approve")
     assert r.status_code == 200
     with _db.SessionLocal() as s:
-        assert s.get(Tag, "xyz").enabled is True
+        assert s.get(Tag, value).enabled is True
 
 
 # ---- pending --------------------------------------------------------------

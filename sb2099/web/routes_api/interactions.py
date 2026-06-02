@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import datetime
 from typing import Literal
 
@@ -157,18 +158,22 @@ def vote_tag(barrage_id: int, request: Request, body: VoteTagIn) -> dict:
         }
 
 
+def _gen_tag_value(session) -> str:
+    """给新候选标签分配一个唯一的不透明内部 id（用户不可见，仅作主键/CSV 引用）。
+
+    标签对人的身份是 label；value 只是内部 id，因此服务端生成、不再由前端编造，
+    避免「同名标签因 value 不同而无法去重」。'u' + 6 位 hex，符合 ^[0-9A-Za-z]{1,8}$。
+    """
+    for _ in range(20):
+        v = "u" + secrets.token_hex(3)
+        if session.get(Tag, v) is None:
+            return v
+    raise HTTPException(status_code=500, detail="could not allocate tag value")
+
+
 class ProposeTagIn(BaseModel):
-    value: str = Field(min_length=1, max_length=8)
     label: str = Field(min_length=1, max_length=32)
     voter_uid: str | None = None
-
-    @field_validator("value")
-    @classmethod
-    def _v(cls, v: str) -> str:
-        v = v.strip()
-        if not _TAG_VALUE_RE.match(v):
-            raise ValueError("value must be 1-8 alphanumeric chars")
-        return v
 
     @field_validator("label")
     @classmethod
@@ -190,11 +195,13 @@ class ProposeTagIn(BaseModel):
 @router.post("/barrage/{barrage_id}/propose-tag", status_code=201)
 @limiter.limit(lambda: rate_for("ratelimit_propose_per_hour_per_ip", 10))
 def propose_tag(barrage_id: int, request: Request, body: ProposeTagIn) -> dict:
-    """提议新 tag 并自动给当前 barrage 投一票。
+    """按「标签名（label）」提议新标签并给当前 barrage 投一票。
 
-    - value 已存在且 enabled=True → 409（直接走 vote-tag）
-    - value 已存在且 enabled=False → 复用现有候选，给 barrage 投一票即可
-    - value 不存在 → 创建 Tag(enabled=False) + 给 barrage 投一票
+    去重以 label 为准（value 是内部 id，由服务端分配）：
+    - 同名「启用」标签已存在 → 409（提示直接投它，别重复提议）
+    - 同名「候选」标签已存在 → 复用它，给当前 barrage 加一票
+      （于是多人 / 多条提议同一名字会累加到同一候选，票数/关联成为真实信号）
+    - 都没有 → 新建候选（enabled=False，value 服务端生成）+ 投一票
     """
     with _db.SessionLocal() as s:
         b = s.execute(
@@ -204,16 +211,19 @@ def propose_tag(barrage_id: int, request: Request, body: ProposeTagIn) -> dict:
             raise HTTPException(status_code=404, detail="barrage not found")
         ip_h = ip_hash(extract_ip(request))
         resolved_uid = resolve_submitter_uid(s, body.voter_uid)
-        existing = s.execute(select(Tag).where(Tag.value == body.value)).scalar_one_or_none()
-        if existing is not None and existing.enabled:
+
+        same_name = s.execute(select(Tag).where(Tag.label == body.label)).scalars().all()
+        if any(t.enabled for t in same_name):
             raise HTTPException(
                 status_code=409,
-                detail={"message": "tag already enabled", "hint": "use /api/barrage/{id}/vote-tag"},
+                detail={"message": "tag already enabled", "hint": "该标签已存在，直接点它投票即可"},
             )
-        if existing is None:
+        candidate = next((t for t in same_name if not t.enabled), None)
+        if candidate is None:
+            value = _gen_tag_value(s)
             s.add(
                 Tag(
-                    value=body.value,
+                    value=value,
                     label=body.label,
                     icon_url=None,
                     sort=999,
@@ -224,11 +234,14 @@ def propose_tag(barrage_id: int, request: Request, body: ProposeTagIn) -> dict:
                 )
             )
             s.commit()
-        # 给 proposer 投一票（pending tag 计票不结算）
+        else:
+            value = candidate.value
+
+        # 给当前 barrage 投一票（候选 tag 计票不结算；同人同条重复提议幂等）
         s.add(
             BarrageTagVote(
                 barrage_id=barrage_id,
-                tag_value=body.value,
+                tag_value=value,
                 voter_uid=resolved_uid,
                 voter_ip_hash=ip_h,
                 ts=datetime.utcnow(),
@@ -238,10 +251,10 @@ def propose_tag(barrage_id: int, request: Request, body: ProposeTagIn) -> dict:
             s.commit()
         except IntegrityError:
             s.rollback()
-        count = vote_count(s, barrage_id, body.value)
+        count = vote_count(s, barrage_id, value)
         return {
             "data": {
-                "tag": body.value,
+                "tag": value,
                 "label": body.label,
                 "count": count,
                 "threshold": vote_threshold(),

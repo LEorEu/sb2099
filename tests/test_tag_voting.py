@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from sb2099 import db as _db
 from sb2099.models import Barrage, BarrageTagVote, Tag, User
@@ -196,35 +197,57 @@ def test_propose_tag_creates_pending_and_self_votes(client, tmp_db):
     bid = _add_barrage(tags="00")
     r = client.post(
         f"/api/barrage/{bid}/propose-tag",
-        json={"value": "newt", "label": "新标签"},
+        json={"label": "新标签"},
     )
     assert r.status_code == 201, r.text
     body = r.json()["data"]
     assert body["pending_approval"] is True
     assert body["count"] == 1
+    assert body["label"] == "新标签"
+    value = body["tag"]  # 服务端生成的内部 value
     with _db.SessionLocal() as s:
-        tag = s.get(Tag, "newt")
+        tag = s.get(Tag, value)
         assert tag is not None
+        assert tag.label == "新标签"
         assert tag.enabled is False
         assert tag.proposed_at is not None
 
 
+def test_propose_same_label_dedups_and_accumulates(client, tmp_db):
+    """同名提议（不同弹幕/不同人）应收敛到同一候选并累加票，而非新建多条。"""
+    bid1 = _add_barrage(content="a", tags="00")
+    bid2 = _add_barrage(content="b", tags="00")
+    r1 = client.post(f"/api/barrage/{bid1}/propose-tag",
+                     json={"label": "名场面"}, headers={"X-Forwarded-For": "1.1.1.1"})
+    r2 = client.post(f"/api/barrage/{bid2}/propose-tag",
+                     json={"label": "名场面"}, headers={"X-Forwarded-For": "2.2.2.2"})
+    assert r1.status_code == 201 and r2.status_code == 201
+    assert r1.json()["data"]["tag"] == r2.json()["data"]["tag"]  # 同一 value
+    with _db.SessionLocal() as s:
+        rows = s.execute(select(Tag).where(Tag.label == "名场面")).scalars().all()
+        assert len(rows) == 1  # 只有一条候选
+        value = rows[0].value
+        total = s.query(BarrageTagVote).filter_by(tag_value=value).count()
+        assert total == 2  # 两条弹幕各一票
+
+
 def test_propose_existing_enabled_tag_conflict(client, tmp_db):
     bid = _add_barrage(tags="00")
+    # "主播" 是种子启用标签（value=00）；按名字提议应 409
     r = client.post(
         f"/api/barrage/{bid}/propose-tag",
-        json={"value": "00", "label": "存在"},
+        json={"label": "主播"},
     )
     assert r.status_code == 409
 
 
-def test_propose_invalid_value_rejected(client, tmp_db):
+def test_propose_empty_label_rejected(client, tmp_db):
     bid = _add_barrage(tags="00")
     r = client.post(
         f"/api/barrage/{bid}/propose-tag",
-        json={"value": "with space", "label": "x"},
+        json={"label": "   "},
     )
-    assert r.status_code == 422  # pydantic validation
+    assert r.status_code == 422  # pydantic validation（label strip 后为空）
 
 
 # ---- integration: admin approve flow -------------------------------------
@@ -241,40 +264,38 @@ def _admin_client(client):
 def test_admin_approve_backfills_threshold_hits(client, tmp_db):
     bid_pass = _add_barrage(content="pass", tags="00")
     bid_fail = _add_barrage(content="fail", tags="00")
-    # 提议 + 3 票（pass） / 2 票（fail）
-    for i, ip in enumerate(("1.1.1.1", "2.2.2.2", "3.3.3.3")):
-        client.post(
-            f"/api/barrage/{bid_pass}/propose-tag" if i == 0 else f"/api/barrage/{bid_pass}/vote-tag",
-            json={"value": "wow", "label": "厉害"} if i == 0 else {"tag_value": "wow"},
-            headers={"X-Forwarded-For": ip},
-        )
+    # 提议（拿到服务端生成的 value）+ 3 票（pass） / 2 票（fail）
+    r0 = client.post(f"/api/barrage/{bid_pass}/propose-tag",
+                     json={"label": "厉害"}, headers={"X-Forwarded-For": "1.1.1.1"})
+    value = r0.json()["data"]["tag"]
+    for ip in ("2.2.2.2", "3.3.3.3"):
+        client.post(f"/api/barrage/{bid_pass}/vote-tag",
+                    json={"tag_value": value}, headers={"X-Forwarded-For": ip})
     for ip in ("4.4.4.4", "5.5.5.5"):
-        client.post(
-            f"/api/barrage/{bid_fail}/vote-tag",
-            json={"tag_value": "wow"},
-            headers={"X-Forwarded-For": ip},
-        )
+        client.post(f"/api/barrage/{bid_fail}/vote-tag",
+                    json={"tag_value": value}, headers={"X-Forwarded-For": ip})
     # admin 批准
     _admin_client(client)
-    r = client.post("/api/admin/tags/wow/approve")
+    r = client.post(f"/api/admin/tags/{value}/approve")
     assert r.status_code == 200
     with _db.SessionLocal() as s:
-        assert s.get(Tag, "wow").enabled is True
-        assert "wow" in s.get(Barrage, bid_pass).tags.split(",")
-        assert "wow" not in s.get(Barrage, bid_fail).tags.split(",")
+        assert s.get(Tag, value).enabled is True
+        assert value in s.get(Barrage, bid_pass).tags.split(",")
+        assert value not in s.get(Barrage, bid_fail).tags.split(",")
 
 
 def test_admin_delete_pending_clears_votes(client, tmp_db):
     bid = _add_barrage(tags="00")
-    client.post(
+    r0 = client.post(
         f"/api/barrage/{bid}/propose-tag",
-        json={"value": "trash", "label": "废"},
+        json={"label": "废"},
         headers={"X-Forwarded-For": "1.1.1.1"},
     )
+    value = r0.json()["data"]["tag"]
     _admin_client(client)
-    r = client.delete("/api/admin/tags/trash")
+    r = client.delete(f"/api/admin/tags/{value}")
     assert r.status_code == 200
     with _db.SessionLocal() as s:
-        assert s.get(Tag, "trash") is None
-        cnt = s.query(BarrageTagVote).filter_by(tag_value="trash").count()
+        assert s.get(Tag, value) is None
+        cnt = s.query(BarrageTagVote).filter_by(tag_value=value).count()
         assert cnt == 0

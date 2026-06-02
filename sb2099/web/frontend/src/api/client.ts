@@ -55,9 +55,9 @@ export const api = {
   voteTag: (barrageId: number, tag_value: string, voter_uid: string | null) =>
     req<{ data: { tag: string; count: number; threshold: number; applied: boolean; pending_approval: boolean } }>(
       `/api/barrage/${barrageId}/vote-tag`, { method: 'POST', body: JSON.stringify({ tag_value, voter_uid }) }).then(r => r.data),
-  proposeTag: (barrageId: number, value: string, label: string, voter_uid: string | null) =>
+  proposeTag: (barrageId: number, label: string, voter_uid: string | null) =>
     req<{ data: { tag: string; label: string; count: number; threshold: number; pending_approval: boolean } }>(
-      `/api/barrage/${barrageId}/propose-tag`, { method: 'POST', body: JSON.stringify({ value, label, voter_uid }) }).then(r => r.data),
+      `/api/barrage/${barrageId}/propose-tag`, { method: 'POST', body: JSON.stringify({ label, voter_uid }) }).then(r => r.data),
   withdraw: (id: number) => req(`/api/submission/${id}/withdraw`, { method: 'DELETE' }),
 
   admin: {
