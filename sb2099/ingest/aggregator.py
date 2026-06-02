@@ -24,6 +24,7 @@ __all__ = [
     "persist_user_from_chat",
     "should_filter",
     "normalized_suffix_strips",
+    "normalized_cut_markers",
 ]
 
 
@@ -50,6 +51,21 @@ def normalized_suffix_strips() -> list[str]:
         if n:
             out.append(n)
     out.sort(key=len, reverse=True)
+    return out
+
+
+def normalized_cut_markers() -> list[str]:
+    """从 setting 读 live_cut_markers,规范化每条标记词。
+
+    供 ingest 入库与后台 recompute 计算 content_norm 时传给 normalize(cut_markers=...),
+    把 douyuex 那种「固定前缀 + 任意装饰」的整条尾巴从标记处截掉。
+    """
+    raw = settings_cache.get("live_cut_markers", []) or []
+    out: list[str] = []
+    for kw in raw:
+        n = normalize(kw)
+        if n:
+            out.append(n)
     return out
 
 
@@ -111,7 +127,11 @@ def _persist_sync(evt: dict) -> None:
     content_raw = evt.get("content") or ""
     if not content_raw:
         return
-    content_norm = normalize(content_raw, suffixes=normalized_suffix_strips())
+    content_norm = normalize(
+        content_raw,
+        suffixes=normalized_suffix_strips(),
+        cut_markers=normalized_cut_markers(),
+    )
     if not content_norm:
         return
 

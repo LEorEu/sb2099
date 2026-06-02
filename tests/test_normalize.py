@@ -79,6 +79,31 @@ def test_normalize_strip_suffixes(raw: str, suffixes, expected: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "raw, markers, expected",
+    [
+        # douyuex 固定前缀 + 千变万化装饰：只配一个标记 Oᴗoಣ 全收
+        ("好姐妹当直播耗材了Oᴗoಣ~", ("Oᴗoಣ",), "好姐妹当直播耗材了"),
+        ("原始人三首Oᴗoಣ喵~", ("Oᴗoಣ",), "原始人三首"),
+        ("没人发现Oᴗoಣですわ", ("Oᴗoಣ",), "没人发现"),
+        ("松子老大好听❤Oᴗoಣ♥✌︎", ("Oᴗoಣ",), "松子老大好听❤"),
+        # 截断后变严格周期 → 再折叠
+        ("亲亲🥰亲亲🥰Oᴗoಣ喵~", ("Oᴗoಣ",), "亲亲🥰"),
+        # 标记在开头 → 不截空，保底
+        ("Oᴗoಣ喵~", ("Oᴗoಣ",), "Oᴗoಣ喵~"),
+        # 不含标记 → 不动
+        ("正常弹幕", ("Oᴗoಣ",), "正常弹幕"),
+    ],
+)
+def test_normalize_cut_markers(raw: str, markers, expected: str) -> None:
+    assert normalize(raw, cut_markers=markers) == expected
+
+
+def test_cut_marker_and_suffix_together():
+    # 先截 Oᴗoಣ 整尾，再剥裸 喵 尾缀
+    assert normalize("谁把塑料袋套我头上了喵Oᴗoಣ喵~", suffixes=("喵",), cut_markers=("Oᴗoಣ",)) == "谁把塑料袋套我头上了"
+
+
+@pytest.mark.parametrize(
     "raw, expected",
     [
         # 整串严格周期 → 折叠到最短 base

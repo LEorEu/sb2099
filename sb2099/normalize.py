@@ -8,6 +8,10 @@
 4. emoji 保留（不剥离）
 5. 繁简不统一
 6. 大小写不归一（"GG" 与 "gg" 视为不同）
+6.5 **截断标记**（可选，传入 `cut_markers`）：在尾缀剥除/折叠之前，若串中出现任一
+   标记词，则从其首次出现处截到结尾（标记前无内容则不截）。用于 douyuex 等插件那种
+   「固定前缀 + 千变万化装饰」的尾巴（`Oᴗoಣ喵~` / `Oᴗoಣですわ` / `Oᴗoಣ♥…`），
+   只需配 `Oᴗoಣ` 一个标记即可全收，避免穷举尾缀变体。标记应已规范化后传入。
 7. **尾缀剥除**（可选，传入 `suffixes`）：在重复段折叠之前，若串尾命中任一尾缀词
    则剥掉，可连续剥多个；剥到只剩尾缀本身则停（保底不剥空）。用于 douyuex 等插件
    给复制弹幕自动追加的自定义尾缀（如 `喵` / `Oᴗoಣ`），使去掉尾缀后内容相同的
@@ -72,6 +76,24 @@ def _collapse_repeat(s: str) -> str:
     return s
 
 
+def _apply_cut_markers(s: str, markers: Sequence[str]) -> str:
+    """截断标记:串中只要出现标记词,就从其(首次出现)位置截到结尾。
+
+    用于 douyuex 等插件追加的「固定前缀 + 千变万化装饰」尾巴
+    (如 `Oᴗoಣ喵~` / `Oᴗoಣですわ` / `Oᴗoಣ♥...`),只需配 `Oᴗoಣ` 一个标记即可全收。
+    保底:标记前无内容(idx==0)则不截,避免把整串截空。markers 应为规范形。
+    """
+    if not markers:
+        return s
+    for m in markers:
+        if not m:
+            continue
+        i = s.find(m)
+        if i > 0:
+            s = s[:i].rstrip()
+    return s
+
+
 def _strip_suffixes(s: str, suffixes: Sequence[str]) -> str:
     """连续剥除串尾命中的尾缀词;剥到只剩尾缀本身则停(保底不剥空)。
 
@@ -91,7 +113,7 @@ def _strip_suffixes(s: str, suffixes: Sequence[str]) -> str:
     return s
 
 
-def normalize(s: str, suffixes: Sequence[str] = ()) -> str:
+def normalize(s: str, suffixes: Sequence[str] = (), cut_markers: Sequence[str] = ()) -> str:
     if not s:
         return ""
 
@@ -116,7 +138,10 @@ def normalize(s: str, suffixes: Sequence[str] = ()) -> str:
     # 3) 空白合并 + 首尾 strip（全角空格 U+3000 也算空白；re \s 已覆盖）
     collapsed = _WS_RE.sub(" ", half).strip()
 
-    # 4) 尾缀剥除（在折叠之前：尾缀追加在重复内容之后，先剥才能还原周期）
+    # 4a) 截断标记（先于尾缀剥除与折叠：把 douyuex 那种「标记+任意装饰」整条尾巴砍掉）
+    collapsed = _apply_cut_markers(collapsed, cut_markers)
+
+    # 4b) 尾缀剥除（在折叠之前：尾缀追加在重复内容之后，先剥才能还原周期）
     collapsed = _strip_suffixes(collapsed, suffixes)
 
     # 5) 重复段折叠（必须在空白合并与尾缀剥除之后）
