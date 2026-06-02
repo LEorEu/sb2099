@@ -20,6 +20,7 @@ export const router = createRouter({
         { path: '', redirect: '/admin/settings' },
         { path: 'settings', name: 'admin-settings', component: () => import('@/views/admin/AdminSettings.vue') },
         { path: 'tags', name: 'admin-tags', component: () => import('@/views/admin/AdminTags.vue') },
+        { path: 'barrage', name: 'admin-barrage', component: () => import('@/views/admin/AdminBarrage.vue') },
         { path: 'pending', name: 'admin-pending', component: () => import('@/views/admin/AdminPending.vue') },
         { path: 'reports', name: 'admin-reports', component: () => import('@/views/admin/AdminReports.vue') },
         { path: 'trash', name: 'admin-trash', component: () => import('@/views/admin/AdminTrash.vue') },

@@ -233,6 +233,48 @@ def test_reports_lists_reported_only_and_dismiss(admin_client):
         ).scalars().all() == []
 
 
+# ---- barrage（全部投稿管理）----------------------------------------------
+
+
+def test_list_barrage_active_with_report_cnt(admin_client):
+    a = _make_barrage("active", "可管理的烂梗内容")
+    _make_barrage("pending", "待审不应出现在这里")
+    with _db.SessionLocal() as s:
+        s.get(Barrage, a).report_cnt = 2
+        s.commit()
+    r = admin_client.get("/api/admin/barrage?q=可管理")
+    assert r.status_code == 200
+    body = r.json()
+    ids = {it["id"]: it for it in body["items"]}
+    assert a in ids
+    assert ids[a]["report_cnt"] == 2
+    assert "total" in body and "last_page" in body
+
+
+def test_list_barrage_excludes_non_active(admin_client):
+    _make_barrage("deleted", "已删除内容XYZ")
+    r = admin_client.get("/api/admin/barrage?q=XYZ")
+    assert r.status_code == 200
+    assert all("XYZ" not in it["content"] for it in r.json()["items"])
+
+
+def test_delete_barrage_soft_deletes(admin_client):
+    bid = _make_barrage("active", "下架我")
+    r = admin_client.post(f"/api/admin/barrage/{bid}/delete")
+    assert r.status_code == 200
+    with _db.SessionLocal() as s:
+        assert s.get(Barrage, bid).status == "deleted"
+
+
+def test_delete_barrage_404(admin_client):
+    assert admin_client.post("/api/admin/barrage/999999/delete").status_code == 404
+
+
+def test_barrage_endpoints_require_login(client):
+    assert client.get("/api/admin/barrage").status_code == 401
+    assert client.post("/api/admin/barrage/1/delete").status_code == 401
+
+
 # ---- trash ----------------------------------------------------------------
 
 

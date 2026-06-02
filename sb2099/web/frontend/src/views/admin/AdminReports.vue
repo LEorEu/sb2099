@@ -23,6 +23,15 @@ async function dismiss(it: AdminReportItem) {
   } catch (e) { toast.push(e instanceof ApiError ? e.message : '操作失败', 'warn') }
 }
 
+async function takeDown(it: AdminReportItem) {
+  if (!confirm(`下架 #${it.id}「${it.content.slice(0, 30)}」？会进回收站，可恢复。`)) return
+  try {
+    await api.admin.deleteBarrage(it.id)
+    toast.push('已下架，进回收站', 'ok')
+    await load()
+  } catch (e) { toast.push(e instanceof ApiError ? e.message : '下架失败', 'warn') }
+}
+
 onMounted(load)
 </script>
 <template>
@@ -45,7 +54,10 @@ onMounted(load)
           <td class="num"><span class="adm-badge warn">{{ it.report_cnt }}</span></td>
           <td>{{ it.status }}</td>
           <td>{{ cst(it.last_report) }}</td>
-          <td><button class="adm-btn sm" @click="dismiss(it)">没问题</button></td>
+          <td class="ops">
+            <button class="adm-btn sm" @click="dismiss(it)">没问题</button>
+            <button class="adm-btn danger sm" @click="takeDown(it)">下架</button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -53,4 +65,5 @@ onMounted(load)
 </template>
 <style scoped>
 .content { max-width: 360px; }
+.ops { display: flex; gap: 6px; }
 </style>

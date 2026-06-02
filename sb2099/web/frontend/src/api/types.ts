@@ -34,6 +34,10 @@ export interface AdminReportItem {
 export interface AdminTrashItem {
   id: number; content: string; tags: string; cnt: number; report_cnt: number; submit_time: string | null
 }
+export interface AdminBarrageItem {
+  id: number; content: string; tags: string; cnt: number; report_cnt: number;
+  submit_time: string | null; submitter: { nickname: string; avatar: string | null } | null
+}
 export interface AdminLiveHotItem {
   id: number; content_sample: string; live_date: string; send_cnt: number;
   unique_sender_cnt: number; last_seen: string | null; is_filtered: boolean

@@ -1,5 +1,5 @@
 import type {
-  AdminLiveHotDetail, AdminLiveHotItem, AdminPendingItem, AdminReportItem,
+  AdminBarrageItem, AdminLiveHotDetail, AdminLiveHotItem, AdminPendingItem, AdminReportItem,
   AdminSettingItem, AdminStats, AdminTag, AdminTrashItem,
   Barrage, BarragePage, LiveItem, Tag, UserHit,
 } from './types'
@@ -85,6 +85,16 @@ export const api = {
 
     getReports: () => req<{ items: AdminReportItem[] }>('/api/admin/reports').then(r => r.items),
     dismissReport: (id: number) => req(`/api/admin/reports/${id}/dismiss`, { method: 'POST' }),
+
+    getBarrage: (p: { q?: string; sort?: 'new' | 'hot'; page?: number; size?: number }) => {
+      const qs = new URLSearchParams()
+      if (p.q) qs.set('q', p.q)
+      qs.set('sort', p.sort || 'new')
+      qs.set('page', String(p.page || 1))
+      if (p.size) qs.set('size', String(p.size))
+      return req<{ items: AdminBarrageItem[]; total: number; last_page: boolean; page: number }>(`/api/admin/barrage?${qs}`)
+    },
+    deleteBarrage: (id: number) => req(`/api/admin/barrage/${id}/delete`, { method: 'POST' }),
 
     getTrash: () => req<{ items: AdminTrashItem[] }>('/api/admin/trash').then(r => r.items),
     restoreTrash: (id: number) => req(`/api/admin/trash/${id}/restore`, { method: 'POST' }),

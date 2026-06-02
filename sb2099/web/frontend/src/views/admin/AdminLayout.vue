@@ -10,6 +10,7 @@ const { toggle } = useTheme()
 const NAV = [
   { to: '/admin/settings', label: '设置' },
   { to: '/admin/tags', label: '标签' },
+  { to: '/admin/barrage', label: '全部烂梗' },
   { to: '/admin/pending', label: '待审' },
   { to: '/admin/reports', label: '反馈' },
   { to: '/admin/trash', label: '回收站' },

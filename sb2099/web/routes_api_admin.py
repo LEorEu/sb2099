@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
@@ -397,6 +398,53 @@ def dismiss_reports_admin(barrage_id: int, _: str = Depends(require_admin)) -> d
             raise HTTPException(status_code=404, detail="barrage 不存在")
         s.execute(delete(BarrageReport).where(BarrageReport.barrage_id == barrage_id))
         row.report_cnt = 0
+        s.commit()
+    return {"ok": True}
+
+
+# ---- barrage（全部投稿管理）----------------------------------------------
+
+
+@router.get("/barrage")
+def list_barrage_admin(
+    q: str = "",
+    sort: Literal["new", "hot"] = "new",
+    page: int = Query(1, ge=1),
+    size: int = Query(30, ge=1, le=100),
+    _: str = Depends(require_admin),
+) -> dict:
+    """全部已上架烂梗：复用公开搜索（FTS/LIKE + 分页），附 report_cnt 供管理与下架。"""
+    from ..search import search_barrage
+
+    res = search_barrage(q=q or None, tags=None, sort=sort, page=page, size=size)
+    items = res["list"]
+    if items:
+        ids = [it["id"] for it in items]
+        with _db.SessionLocal() as s:
+            rc = {
+                r.id: r.report_cnt
+                for r in s.execute(
+                    select(Barrage.id, Barrage.report_cnt).where(Barrage.id.in_(ids))
+                ).all()
+            }
+        for it in items:
+            it["report_cnt"] = rc.get(it["id"], 0)
+    return {
+        "items": items,
+        "total": res["total"],
+        "last_page": res["last_page"],
+        "page": page,
+    }
+
+
+@router.post("/barrage/{barrage_id}/delete")
+def delete_barrage_admin(barrage_id: int, _: str = Depends(require_admin)) -> dict:
+    """下架（软删）一条投稿：status → deleted，进回收站、可恢复。供「全部烂梗」与「反馈」页共用。"""
+    with _db.SessionLocal() as s:
+        row = s.get(Barrage, barrage_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="barrage 不存在")
+        row.status = "deleted"
         s.commit()
     return {"ok": True}
 
