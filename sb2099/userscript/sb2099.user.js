@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
-// @namespace    https://github.com/lbf186/sb2099
-// @version      0.1.0
+// @namespace    https://github.com/LEorEu/sb2099
+// @version      0.2.0
 // @description  在斗鱼 2099 房间（real id 12740109）的页面内嵌入烂梗投稿库面板，支持搜索/tag 筛选/本地收藏/单条复制+发送
-// @author       lbf186
+// @author       Eu
 // @match        https://www.douyu.com/2099
 // @match        https://www.douyu.com/2099?*
 // @match        https://www.douyu.com/12740109
@@ -13,7 +13,9 @@
 // @grant        GM_setClipboard
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @connect      *
+// @connect      www.sb2099.cn
+// @connect      sb2099.cn
+// @icon         https://apic.douyucdn.cn/upload/avatar_v3/202512/a8ede184d6f04a9585e096d0d55f2776_middle.jpg
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
@@ -23,8 +25,8 @@
 
   // ---- 配置 ---------------------------------------------------------------
   // 部署到公网后改这一行即可。
-  const API_BASE = 'http://127.0.0.1:8000';
-  const SCRIPT_VERSION = '0.1.0';
+  const API_BASE = 'https://www.sb2099.cn';
+  const SCRIPT_VERSION = '0.2.0';
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1';
   const STORAGE_KEY_BLOCKED = 'sb2099_blocked_v1';
   const STORAGE_KEY_PANEL_OPEN = 'sb2099_panel_open_v1';

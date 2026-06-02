@@ -234,6 +234,21 @@ def test_submit_barrage_rate_limit_429(client):
     assert r6.status_code == 429
 
 
+def test_presence_counts_distinct_ips(client):
+    import sb2099.web.routes_api as ra
+    with ra._presence_lock:
+        ra._presence.clear()
+    r1 = client.get("/api/presence", headers={"x-forwarded-for": "1.1.1.1"})
+    assert r1.status_code == 200
+    assert r1.json()["online"] == 1
+    # 同 IP 再来一次仍是 1（去重）
+    r1b = client.get("/api/presence", headers={"x-forwarded-for": "1.1.1.1"})
+    assert r1b.json()["online"] == 1
+    # 不同 IP → 2
+    r2 = client.get("/api/presence", headers={"x-forwarded-for": "2.2.2.2"})
+    assert r2.json()["online"] == 2
+
+
 def test_submit_signed_user_gets_higher_limit(client):
     """已选有效用户署名 → 限额放宽到 30/h，连发 6 条仍全部 201（>匿名 5）。"""
     from sb2099.models import User

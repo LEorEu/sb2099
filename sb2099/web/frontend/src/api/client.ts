@@ -24,6 +24,7 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getTags: () => req<{ data: Tag[] }>('/api/tags').then(r => r.data),
+  presence: () => req<{ online: number }>('/api/presence'),
   getRandom: () => req<{ data: Barrage }>('/api/random').then(r => r.data),
   getBarragesByIds: (ids: number[]) =>
     req<{ data: Barrage[] }>(`/api/barrage/by-ids?ids=${ids.join(',')}`).then(r => r.data),
