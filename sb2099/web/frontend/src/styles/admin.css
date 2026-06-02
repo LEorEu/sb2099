@@ -1,0 +1,66 @@
+/* 后台控制台共享样式：复用 theme.css 的 CSS 变量，浅色为主、可切深色。 */
+
+.adm-shell { min-height: 100vh; background: var(--bg); }
+
+.adm-bar {
+  height: 56px; border-bottom: 1px solid var(--line); background: var(--panel);
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center;
+}
+.adm-bar .inner {
+  width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 18px;
+  display: flex; align-items: center; gap: 16px;
+}
+.adm-brand { font-weight: 900; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.adm-brand .tag { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; }
+.adm-nav { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; }
+.adm-nav a { padding: 6px 11px; border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.adm-nav a.on { color: var(--accent); background: var(--accent-soft); }
+.adm-tools { display: flex; gap: 7px; align-items: center; }
+
+.adm-main { max-width: 1100px; margin: 0 auto; padding: 22px 18px 64px; }
+.adm-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.adm-head h1 { font-size: 21px; font-weight: 900; }
+.adm-head .sub { font-size: 13px; color: var(--subtle); }
+
+.adm-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 20px; margin-bottom: 16px;
+}
+
+.adm-btn {
+  height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 13px; font-weight: 700;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.adm-btn:hover { border-color: var(--line2); }
+.adm-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.adm-btn.primary:hover { background: var(--accent-deep); }
+.adm-btn.danger { color: var(--accent); border-color: var(--accent-soft); }
+.adm-btn.danger:hover { background: var(--accent-soft); }
+.adm-btn.ghost { background: transparent; }
+.adm-btn:disabled { opacity: .55; cursor: not-allowed; }
+.adm-btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+.adm-input, .adm-textarea {
+  width: 100%; border: 1px solid var(--line2); border-radius: 9px; background: var(--panel2);
+  color: var(--ink); font: inherit; font-size: 13px; padding: 8px 11px; resize: vertical;
+}
+.adm-input:focus, .adm-textarea:focus { outline: none; border-color: var(--accent); }
+
+.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-table th, .adm-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.adm-table th { color: var(--subtle); font-weight: 700; font-size: 12px; }
+.adm-table tr:last-child td { border-bottom: none; }
+.adm-table .num { font-variant-numeric: tabular-nums; }
+
+.adm-empty { padding: 44px; text-align: center; color: var(--subtle); }
+.adm-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 12px; color: var(--muted); }
+
+.adm-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; }
+.adm-badge.green { color: var(--green); background: var(--green-soft); }
+.adm-badge.warn { color: var(--accent); background: var(--accent-soft); }
+.adm-badge.muted { color: var(--subtle); background: var(--panel2); border: 1px solid var(--line); }
+
+.adm-flash { border-radius: 9px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+.adm-flash.ok { color: var(--green); background: var(--green-soft); }
+.adm-flash.err { color: var(--accent); background: var(--accent-soft); }

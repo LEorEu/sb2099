@@ -134,7 +134,7 @@ python -m uvicorn sb2099.web.app:app --host 0.0.0.0 --port 8090
 浏览器访问 `http://localhost:8090/` 即可。后端在同一端口同时提供 SPA 与 `/api/*`，无需另配 nginx 静态目录。
 
 > [!NOTE]
-> **本地开发**可前后端分离：`npm run dev` 起 Vite（自动 proxy `/api`、`/admin`、`/userscript` 到 8090），另开一个终端跑 uvicorn。改前端热更新，不必每次 build。
+> **本地开发**可前后端分离：`npm run dev` 起 Vite（自动 proxy `/api`、`/userscript` 到 8090），另开一个终端跑 uvicorn。改前端热更新，不必每次 build。后台 `/admin/*` 现在也是同一套 SPA 的路由（数据走 `/api/admin`），由 Vite 直接接管。
 
 ---
 
@@ -192,8 +192,8 @@ python -m tools.renorm_raw
 
 | 层 | 技术 |
 |---|---|
-| 后端 | Python 3.11+ · [FastAPI](https://fastapi.tiangolo.com/) · SQLite（WAL + FTS5 trigram）· Alembic |
-| 前端 | [Vue 3](https://vuejs.org/) · [Vite](https://vitejs.dev/) · TypeScript · Pinia · vue-router（SPA，由后端回退托管） |
+| 后端 | Python 3.11+ · [FastAPI](https://fastapi.tiangolo.com/)（纯 JSON API，含 `/api` 公开端点与 `/api/admin` 后台端点）· SQLite（WAL + FTS5 trigram）· Alembic |
+| 前端 | [Vue 3](https://vuejs.org/) · [Vite](https://vitejs.dev/) · TypeScript · Pinia · vue-router（公开三页 **+ `/admin` 后台**同属一套 SPA，由后端回退托管） |
 | 抓取 | asyncio TCP，直连 `danmuproxy.douyu.com:8601`，匿名多 gid 入组 |
 | 反滥用 | `setting` 表驱动的降噪 / 审核 / 限流 / 反作弊规则，禁止硬编码 |
 | 脚本 | Tampermonkey 用户脚本，直播间内消费投稿库 |
@@ -208,6 +208,7 @@ python -m tools.renorm_raw
 - [x] 投稿 60s 撤回 + 反作弊待审 + 标签投票 / 提议
 - [x] 用户名册 + 粉丝牌署名
 - [x] **前端 Vue3 + Vite 重写**（浅色 / 深色，FastAPI 退纯 API）
+- [x] **后台并入 Vue SPA**（`/admin` 同栈复用主题/组件，旧 Jinja2 后台与 `/static` 资源已下线，全部走 `/api/admin`）
 - [ ] 全部烂梗无限滚动（当前翻页）
 - [ ] 标签投票 / 提议的完整前端交互（当前为占位入口）
 

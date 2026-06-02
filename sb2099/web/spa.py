@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 # 这些前缀交给真正的路由/挂载处理，不走 SPA 回退
-SPA_EXCLUDE = ("api/", "admin", "static/", "assets/", "userscript")
+SPA_EXCLUDE = ("api/", "assets/", "userscript")
 
 
 def mount_spa(app: FastAPI, dist_dir: Path) -> None:

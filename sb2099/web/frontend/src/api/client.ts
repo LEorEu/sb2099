@@ -1,4 +1,8 @@
-import type { Barrage, BarragePage, LiveItem, Tag, UserHit } from './types'
+import type {
+  AdminLiveHotDetail, AdminLiveHotItem, AdminPendingItem, AdminReportItem,
+  AdminSettingItem, AdminStats, AdminTag, AdminTrashItem,
+  Barrage, BarragePage, LiveItem, Tag, UserHit,
+} from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) {
@@ -55,4 +59,44 @@ export const api = {
     req<{ data: { tag: string; label: string; count: number; threshold: number; pending_approval: boolean } }>(
       `/api/barrage/${barrageId}/propose-tag`, { method: 'POST', body: JSON.stringify({ value, label, voter_uid }) }).then(r => r.data),
   withdraw: (id: number) => req(`/api/submission/${id}/withdraw`, { method: 'DELETE' }),
+
+  admin: {
+    me: () => req<{ authenticated: boolean }>('/api/admin/me'),
+    login: (token: string) =>
+      req<{ ok: boolean }>('/api/admin/login', { method: 'POST', body: JSON.stringify({ token }) }),
+    logout: () => req('/api/admin/logout', { method: 'POST' }),
+
+    getSettings: () => req<{ items: AdminSettingItem[] }>('/api/admin/settings').then(r => r.items),
+    putSettings: (values: Record<string, number | string | string[]>) =>
+      req<{ ok: boolean }>('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ values }) }),
+
+    getTags: () => req<{ vote_threshold: number; tags: AdminTag[] }>('/api/admin/tags'),
+    createTag: (t: { value: string; label: string; icon_url?: string; sort?: number }) =>
+      req('/api/admin/tags', { method: 'POST', body: JSON.stringify(t) }),
+    updateTag: (value: string, t: { label: string; icon_url?: string; sort?: number; enabled: boolean }) =>
+      req(`/api/admin/tags/${value}`, { method: 'PATCH', body: JSON.stringify(t) }),
+    deleteTag: (value: string) => req(`/api/admin/tags/${value}`, { method: 'DELETE' }),
+    approveTag: (value: string) => req(`/api/admin/tags/${value}/approve`, { method: 'POST' }),
+
+    getPending: () => req<{ items: AdminPendingItem[] }>('/api/admin/pending').then(r => r.items),
+    approvePending: (id: number, tags: string) =>
+      req(`/api/admin/pending/${id}/approve`, { method: 'POST', body: JSON.stringify({ tags }) }),
+    rejectPending: (id: number) => req(`/api/admin/pending/${id}/reject`, { method: 'POST' }),
+
+    getReports: () => req<{ items: AdminReportItem[] }>('/api/admin/reports').then(r => r.items),
+    dismissReport: (id: number) => req(`/api/admin/reports/${id}/dismiss`, { method: 'POST' }),
+
+    getTrash: () => req<{ items: AdminTrashItem[] }>('/api/admin/trash').then(r => r.items),
+    restoreTrash: (id: number) => req(`/api/admin/trash/${id}/restore`, { method: 'POST' }),
+    purgeTrash: (id: number) => req(`/api/admin/trash/${id}/purge`, { method: 'POST' }),
+
+    getLiveHot: (filtered: boolean) =>
+      req<{ filtered: boolean; items: AdminLiveHotItem[] }>(`/api/admin/live-hot?filtered=${filtered}`).then(r => r.items),
+    getLiveHotDetail: (id: number) => req<AdminLiveHotDetail>(`/api/admin/live-hot/${id}`),
+    recomputeLiveHot: () =>
+      req<{ ok: boolean; raw_renormalized: number }>('/api/admin/live-hot/recompute', { method: 'POST' }),
+    rescanLiveHot: () => req<{ ok: boolean }>('/api/admin/live-hot/rescan', { method: 'POST' }),
+
+    getStats: () => req<AdminStats>('/api/admin/stats'),
+  },
 }

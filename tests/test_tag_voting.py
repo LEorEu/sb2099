@@ -233,9 +233,8 @@ def test_propose_invalid_value_rejected(client, tmp_db):
 def _admin_client(client):
     """登录 admin 后用同一个 client。"""
     token = "test_token_" + "x" * 16
-    r = client.post("/admin/login", data={"token": token, "next": "/admin/tags"},
-                    follow_redirects=False)
-    assert r.status_code == 303
+    r = client.post("/api/admin/login", json={"token": token})
+    assert r.status_code == 200
     return client
 
 
@@ -257,8 +256,8 @@ def test_admin_approve_backfills_threshold_hits(client, tmp_db):
         )
     # admin 批准
     _admin_client(client)
-    r = client.post("/admin/tags/wow/approve", follow_redirects=False)
-    assert r.status_code == 303
+    r = client.post("/api/admin/tags/wow/approve")
+    assert r.status_code == 200
     with _db.SessionLocal() as s:
         assert s.get(Tag, "wow").enabled is True
         assert "wow" in s.get(Barrage, bid_pass).tags.split(",")
@@ -273,8 +272,8 @@ def test_admin_delete_pending_clears_votes(client, tmp_db):
         headers={"X-Forwarded-For": "1.1.1.1"},
     )
     _admin_client(client)
-    r = client.post("/admin/tags/trash/delete", follow_redirects=False)
-    assert r.status_code == 303
+    r = client.delete("/api/admin/tags/trash")
+    assert r.status_code == 200
     with _db.SessionLocal() as s:
         assert s.get(Tag, "trash") is None
         cnt = s.query(BarrageTagVote).filter_by(tag_value="trash").count()
