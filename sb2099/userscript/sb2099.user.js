@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         sb2099 - 斗鱼 2099 烂梗发送器
 // @namespace    https://github.com/LEorEu/sb2099
-// @version      0.5.1
+// @version      0.5.2
 // @description  在斗鱼 2099 房间页面内嵌入烂梗库面板：搜索 / 单条复制 / 一键发送，收藏夹可从主站导入
 // @author       sb2099.cn
 // @match        https://www.douyu.com/*
@@ -23,10 +23,10 @@
   'use strict';
 
   // ---- 配置 ---------------------------------------------------------------
-  const API_BASE = 'https://www.sb2099.cn';
-  const HOME_URL = 'https://www.sb2099.cn';
+  const API_BASE = 'https://sb2099.cn';
+  const HOME_URL = 'https://sb2099.cn';
   const FEEDBACK_URL = 'https://v.wjx.cn/vm/rRSgU2a.aspx#'; // 问卷星反馈表
-  const SCRIPT_VERSION = '0.5.1';
+  const SCRIPT_VERSION = '0.5.2';
   const STORAGE_KEY_FAVS = 'sb2099_favorites_v1'; // 与主站收藏夹同一 key/结构，可互通
 
   // ---- 工具：API 调用 -----------------------------------------------------
