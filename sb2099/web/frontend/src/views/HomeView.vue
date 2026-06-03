@@ -36,4 +36,10 @@ const latest = ref<InstanceType<typeof LatestList> | null>(null)
 .cols{display:grid;grid-template-columns:1.25fr .9fr;gap:18px;align-items:start}
 .latest{margin-top:18px}
 @media (max-width:820px){.cols{grid-template-columns:1fr}}
+@media (max-width:720px){
+  .home{padding:26px 14px 40px}
+  .hero{margin-bottom:22px}
+  .hero h1{font-size:29px;margin-top:12px}
+  .sub{font-size:14px}
+}
 </style>

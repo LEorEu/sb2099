@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
+import BottomNav from '@/components/BottomNav.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import FavoritesDrawer from '@/components/FavoritesDrawer.vue'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -29,6 +30,7 @@ watch(isAdmin, loadPublicTags)
   <template v-else>
     <TopBar :fav-count="favCount" @open-favorites="drawerOpen = true" />
     <main><router-view /></main>
+    <BottomNav />
     <FavoritesDrawer v-model:open="drawerOpen" />
     <ToastHost />
   </template>

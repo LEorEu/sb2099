@@ -91,4 +91,13 @@ function onReport() {
 .copy{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-weight:800;font-size:13px;cursor:pointer}
 .ic2{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:9px;width:38px;height:38px;padding:0;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-variant-emoji:text}
 .ic2.on{color:var(--accent);border-color:var(--accent)}
+/* 移动端：无 hover，标签/投稿人改为常驻内嵌；卡片转纵向 */
+@media (max-width:720px){
+  .meme{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+  .meta .hint{display:none}
+  .hovercard{position:static;opacity:1;visibility:visible;transform:none;pointer-events:auto;
+    min-width:0;max-width:none;box-shadow:none;background:var(--panel2);margin-top:10px}
+  .acts{justify-content:flex-end}
+  .copy{flex:1}
+}
 </style>

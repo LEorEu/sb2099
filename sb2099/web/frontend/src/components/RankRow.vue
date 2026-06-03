@@ -91,4 +91,12 @@ async function confirmPromote() {
 .copy{background:var(--accent);color:#fff}
 .save{background:var(--accent-soft);color:var(--accent)}
 .done{font-size:11px;font-weight:800;color:var(--green);background:var(--green-soft);padding:7px 10px;border-radius:8px;align-self:center}
+/* 移动端：无 hover，「首发」改为常驻内嵌 */
+@media (max-width:720px){
+  .rank{padding:13px 14px;gap:10px}
+  .no{width:22px;font-size:18px}
+  .m .hint{display:none}
+  .hovercard{position:static;opacity:1;visibility:visible;transform:none;pointer-events:auto;
+    min-width:0;max-width:none;box-shadow:none;background:var(--panel2);margin-top:10px}
+}
 </style>
