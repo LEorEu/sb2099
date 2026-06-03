@@ -43,7 +43,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
               </p>
               <p>然后任选一种装进油猴：</p>
               <ul>
-                <li><b>最简单</b>：把下载到的 <code>sb2099.user.js</code> 直接<b>拖进浏览器窗口</b>，油猴会弹出安装页，点「安装」即可。</li>
+                <li><b>最简单</b>：把下载到的 <code>sb2099.user.js</code> 直接<b>拖进浏览器的油猴管理面板窗口</b>，油猴会弹出安装页，点「安装」即可。</li>
                 <li>或：点油猴图标 →「管理面板」→ 顶部「实用工具」→ 最下方「导入」里选这个本地文件。</li>
                 <li>或：油猴「管理面板」→「＋」新建脚本，把文件内容全选复制粘进去，Ctrl+S 保存。</li>
               </ul>

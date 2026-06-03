@@ -20,7 +20,7 @@ onMounted(async () => { await tags.load(); await load() })
 </script>
 <template>
   <section class="app-wrap page">
-    <div class="head"><h2>弹幕热榜 🔥</h2><span class="cnt">直播中正在刷的弹幕，实时统计</span></div>
+    <div class="head"><h2>弹幕热榜</h2><span class="cnt">直播中正在刷的弹幕，实时统计</span></div>
     <WindowToggle v-model="window" />
     <p class="hint">看到有想要+1的，点「收录」就进仓库了 · 已在库的标 ✓</p>
     <div v-if="loading" class="empty">加载中…</div>

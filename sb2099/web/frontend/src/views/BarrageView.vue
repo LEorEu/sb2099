@@ -37,7 +37,7 @@ onMounted(async () => { await tags.load(); await load() })
 
     <div class="search">
       <span class="ic">🔍</span>
-      <input v-model="q" placeholder="搜个梗… 比如「蜜雪」「厕所」「这TM是歌」" @keyup.enter="doSearch" />
+      <input v-model="q" placeholder="搜索烂梗… 比如「火鸡面」「茉莉奶绿」「小皮鞋」" @keyup.enter="doSearch" />
       <button class="go" @click="doSearch">搜梗</button>
     </div>
 
