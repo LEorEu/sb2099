@@ -4,6 +4,7 @@ import { api, ApiError } from '@/api/client'
 import type { AdminTrashItem } from '@/api/types'
 import { useToast } from '@/composables/useToast'
 import { cst } from '@/composables/useCst'
+import TagChips from '@/components/TagChips.vue'
 
 const toast = useToast()
 const items = ref<AdminTrashItem[]>([])
@@ -44,7 +45,7 @@ onMounted(load)
         <tr v-for="it in items" :key="it.id">
           <td class="adm-mono">{{ it.id }}</td>
           <td class="content">{{ it.content }}</td>
-          <td class="adm-mono">{{ it.tags }}</td>
+          <td><TagChips :csv="it.tags" /></td>
           <td class="num">{{ it.cnt }}</td>
           <td>{{ cst(it.submit_time) }}</td>
           <td class="ops">

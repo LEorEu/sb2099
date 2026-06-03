@@ -14,7 +14,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
-from sqlalchemy import delete, desc, func, select, text, update
+from sqlalchemy import bindparam, delete, desc, func, select, text, update
 
 from .. import db as _db
 from ..models import (
@@ -715,6 +715,27 @@ def stats_admin(_: str = Depends(require_admin)) -> dict:
             ),
             {"h24": h24},
         ).all()
+
+        # 给每个 IP 哈希回填「这个 IP 背后是谁投的」：关联 user 拿斗鱼昵称/头像；
+        # submitter_uid 为空的算匿名。一个 IP 可能对应多个署名 + 匿名混合。
+        ip_hashes = [r[0] for r in top_ip_rows]
+        submitters_by_ip: dict[str, list[dict]] = {}
+        anon_by_ip: dict[str, bool] = {}
+        if ip_hashes:
+            sub_sql = text(
+                "SELECT b.submitter_ip_hash AS iph, b.submitter_uid AS uid, "
+                "       u.nickname AS nickname, u.avatar AS avatar "
+                "FROM barrage b LEFT JOIN user u ON u.uid = b.submitter_uid "
+                "WHERE b.submit_time >= :h24 AND b.submitter_ip_hash IN :ips"
+            ).bindparams(bindparam("ips", expanding=True))
+            for r in s.execute(sub_sql, {"h24": h24, "ips": ip_hashes}).mappings().all():
+                iph = r["iph"]
+                if r["uid"] and r["nickname"]:
+                    lst = submitters_by_ip.setdefault(iph, [])
+                    if not any(x["nickname"] == r["nickname"] for x in lst):
+                        lst.append({"nickname": r["nickname"], "avatar": avatar_url(r["avatar"])})
+                elif not r["uid"]:
+                    anon_by_ip[iph] = True
     return {
         "raw_24h": raw_24h,
         "submit_24h": submit_24h,
@@ -723,5 +744,13 @@ def stats_admin(_: str = Depends(require_admin)) -> dict:
         "pending_total": pending_total,
         "deleted_total": deleted_total,
         "report_24h": report_24h,
-        "top_ip": [{"ip_hash": r[0], "count": r[1]} for r in top_ip_rows],
+        "top_ip": [
+            {
+                "ip_hash": r[0],
+                "count": r[1],
+                "submitters": submitters_by_ip.get(r[0], []),
+                "anon": anon_by_ip.get(r[0], False),
+            }
+            for r in top_ip_rows
+        ],
     }

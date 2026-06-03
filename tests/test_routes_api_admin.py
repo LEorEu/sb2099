@@ -435,3 +435,25 @@ def test_stats_shape(admin_client):
               "pending_total", "deleted_total", "report_24h", "top_ip"):
         assert k in body
     assert body["pending_total"] >= 1 and body["deleted_total"] >= 1
+
+
+def test_stats_top_ip_enriched_with_submitter(admin_client):
+    """IP TOP 应回填该 IP 背后的投稿人斗鱼昵称；匿名投稿标记 anon。"""
+    from sb2099.models import User
+    now = datetime.utcnow()
+    with _db.SessionLocal() as s:
+        s.add(User(uid="u777", nickname="阿松", avatar="avatar_v3/x", first_seen=now, last_seen=now, source="seed"))
+        # 署名投稿（带 ip_hash + uid）
+        s.add(Barrage(content="署名梗", content_norm="署名梗", tags="00", source="user",
+                      submitter_ip_hash="ipA", submitter_uid="u777",
+                      submit_time=now, status="active"))
+        # 同 IP 的匿名投稿
+        s.add(Barrage(content="匿名梗", content_norm="匿名梗", tags="00", source="user",
+                      submitter_ip_hash="ipA", submitter_uid=None,
+                      submit_time=now, status="active"))
+        s.commit()
+    body = admin_client.get("/api/admin/stats").json()
+    row = next((r for r in body["top_ip"] if r["ip_hash"] == "ipA"), None)
+    assert row is not None
+    assert any(u["nickname"] == "阿松" for u in row["submitters"])
+    assert row["anon"] is True

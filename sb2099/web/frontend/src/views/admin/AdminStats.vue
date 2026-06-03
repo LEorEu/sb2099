@@ -36,14 +36,24 @@ const cards = (d: AdminStats) => [
     </div>
 
     <div class="adm-card">
-      <h2 class="sec">24h 投稿 IP TOP（哈希）</h2>
+      <h2 class="sec">24h 投稿 IP TOP</h2>
+      <p class="sechint">同一 IP 投稿越多越靠前；右侧是该 IP 背后的投稿人（斗鱼昵称，匿名投稿标「匿名」）。</p>
       <div v-if="!data.top_ip.length" class="adm-empty">无</div>
       <table v-else class="adm-table">
-        <thead><tr><th>ip_hash</th><th class="num">投稿数</th></tr></thead>
+        <thead><tr><th class="num">投稿数</th><th>投稿人</th><th>IP 哈希</th></tr></thead>
         <tbody>
           <tr v-for="r in data.top_ip" :key="r.ip_hash">
-            <td class="adm-mono">{{ r.ip_hash }}</td>
             <td class="num">{{ r.count }}</td>
+            <td>
+              <span class="who">
+                <span v-for="(u, i) in r.submitters" :key="i" class="person">
+                  <img v-if="u.avatar" :src="u.avatar" alt="" />{{ u.nickname }}
+                </span>
+                <span v-if="r.anon" class="anon">匿名</span>
+                <span v-if="!r.submitters.length && !r.anon" class="anon">—</span>
+              </span>
+            </td>
+            <td class="adm-mono ipcol">{{ r.ip_hash }}</td>
           </tr>
         </tbody>
       </table>
@@ -56,4 +66,10 @@ const cards = (d: AdminStats) => [
 .stat .v { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .stat .l { font-size: 12px; color: var(--subtle); }
 .sec { font-size: 14px; font-weight: 800; margin-bottom: 10px; }
+.sechint { font-size: 12px; color: var(--subtle); margin: -4px 0 12px; }
+.who { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.person { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.person img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+.anon { color: var(--subtle); }
+.ipcol { color: var(--subtle); }
 </style>

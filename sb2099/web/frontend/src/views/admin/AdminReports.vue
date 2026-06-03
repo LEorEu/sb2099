@@ -5,6 +5,7 @@ import type { AdminReportItem } from '@/api/types'
 import { useToast } from '@/composables/useToast'
 import { useAdminStore } from '@/stores/admin'
 import { cst } from '@/composables/useCst'
+import TagChips from '@/components/TagChips.vue'
 
 const toast = useToast()
 const store = useAdminStore()
@@ -54,7 +55,7 @@ onMounted(load)
         <tr v-for="it in items" :key="it.id">
           <td class="adm-mono">{{ it.id }}</td>
           <td class="content">{{ it.content }}</td>
-          <td class="adm-mono">{{ it.tags }}</td>
+          <td><TagChips :csv="it.tags" /></td>
           <td class="num">{{ it.cnt }}</td>
           <td class="num"><span class="adm-badge warn">{{ it.report_cnt }}</span></td>
           <td>{{ it.status }}</td>

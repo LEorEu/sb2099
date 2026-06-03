@@ -54,5 +54,8 @@ export interface AdminLiveHotDetail {
 export interface AdminStats {
   raw_24h: number; submit_24h: number; copy_total: number; live_hot_total: number;
   pending_total: number; deleted_total: number; report_24h: number;
-  top_ip: { ip_hash: string; count: number }[]
+  top_ip: {
+    ip_hash: string; count: number;
+    submitters: { nickname: string; avatar: string | null }[]; anon: boolean
+  }[]
 }
