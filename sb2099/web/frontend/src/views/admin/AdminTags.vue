@@ -13,7 +13,7 @@ const loading = ref(true)
 const enabled = computed(() => tags.value.filter(t => t.enabled))
 const pending = computed(() => tags.value.filter(t => !t.enabled))
 
-const draft = ref({ value: '', label: '', icon_url: '', sort: 0 })
+const draft = ref({ label: '', icon_url: '', sort: 0 })
 
 async function load() {
   loading.value = true
@@ -31,13 +31,13 @@ function fail(e: unknown, fallback: string) {
 }
 
 async function create() {
-  if (!draft.value.value || !draft.value.label) return
+  if (!draft.value.label.trim()) return
   try {
     await api.admin.createTag({
-      value: draft.value.value, label: draft.value.label,
+      label: draft.value.label.trim(),
       icon_url: draft.value.icon_url, sort: Number(draft.value.sort) || 0,
     })
-    draft.value = { value: '', label: '', icon_url: '', sort: 0 }
+    draft.value = { label: '', icon_url: '', sort: 0 }
     toast.push('已新增标签', 'ok')
     await load()
   } catch (e) { fail(e, '新增失败') }
@@ -48,12 +48,12 @@ async function saveRow(t: AdminTag) {
     await api.admin.updateTag(t.value, {
       label: t.label, icon_url: t.icon_url || '', sort: Number(t.sort) || 0, enabled: t.enabled,
     })
-    toast.push(`已保存 ${t.value}`, 'ok')
+    toast.push(`已保存「${t.label}」`, 'ok')
   } catch (e) { fail(e, '保存失败') }
 }
 
 async function remove(t: AdminTag) {
-  if (!confirm(`删除标签「${t.label}」(${t.value})？相关投票会一并清除。`)) return
+  if (!confirm(`删除标签「${t.label}」？相关投票会一并清除。`)) return
   try {
     await api.admin.deleteTag(t.value)
     toast.push('已删除', 'ok')
@@ -104,10 +104,9 @@ onMounted(load)
     <div class="adm-card">
       <h2 class="sec">启用中 <span class="adm-badge muted">{{ enabled.length }}</span></h2>
       <table class="adm-table">
-        <thead><tr><th>value</th><th>名称</th><th>图标 URL</th><th class="num">排序</th><th>启用</th><th></th></tr></thead>
+        <thead><tr><th>名称</th><th>图标 URL</th><th class="num">排序</th><th>启用</th><th></th></tr></thead>
         <tbody>
           <tr v-for="t in enabled" :key="t.value">
-            <td class="adm-mono">{{ t.value }}</td>
             <td><input class="adm-input sm" v-model="t.label" /></td>
             <td><input class="adm-input sm" v-model="t.icon_url" placeholder="可空" /></td>
             <td class="num"><input class="adm-input sm w60" v-model.number="t.sort" /></td>
@@ -125,8 +124,7 @@ onMounted(load)
     <form class="adm-card" @submit.prevent="create">
       <h2 class="sec">新建标签</h2>
       <div class="new-grid">
-        <input class="adm-input" v-model="draft.value" placeholder="value（1-8 位字母/数字）" />
-        <input class="adm-input" v-model="draft.label" placeholder="显示名称" />
+        <input class="adm-input" v-model="draft.label" placeholder="标签名称" />
         <input class="adm-input" v-model="draft.icon_url" placeholder="图标 URL（可空）" />
         <input class="adm-input w80" v-model.number="draft.sort" placeholder="排序" />
         <button class="adm-btn primary" type="submit">新增</button>

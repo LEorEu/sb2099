@@ -270,9 +270,51 @@ def test_delete_barrage_404(admin_client):
     assert admin_client.post("/api/admin/barrage/999999/delete").status_code == 404
 
 
+def test_edit_barrage_updates_content_and_tags(admin_client):
+    from sb2099.normalize import normalize
+    bid = _make_barrage("active", "原始内容啊", "00")
+    r = admin_client.patch(f"/api/admin/barrage/{bid}",
+                           json={"content": "改后的内容呀", "tags": ["02", "00"]})
+    assert r.status_code == 200
+    with _db.SessionLocal() as s:
+        row = s.get(Barrage, bid)
+        assert row.content == "改后的内容呀"
+        assert row.content_norm == normalize("改后的内容呀")
+        assert row.tags == "00,02"  # 去重 + 排序
+
+
+def test_edit_barrage_dedup_409(admin_client):
+    from sb2099.normalize import normalize
+    with _db.SessionLocal() as s:
+        s.add(Barrage(content="占位 A", content_norm=normalize("撞车的内容"), tags="",
+                      source="user", submit_time=datetime.utcnow(), status="active"))
+        s.commit()
+    bid = _make_barrage("active", "另一条 B", "00")
+    r = admin_client.patch(f"/api/admin/barrage/{bid}",
+                           json={"content": "撞车的内容", "tags": []})
+    assert r.status_code == 409
+
+
+def test_edit_barrage_404(admin_client):
+    r = admin_client.patch("/api/admin/barrage/999999",
+                           json={"content": "随便六个字啊", "tags": []})
+    assert r.status_code == 404
+
+
+def test_create_tag_auto_value_when_blank(admin_client):
+    r = admin_client.post("/api/admin/tags", json={"label": "自动分配"})
+    assert r.status_code == 201
+    value = r.json()["value"]
+    assert value and value.isdigit()
+    with _db.SessionLocal() as s:
+        row = s.get(Tag, value)
+        assert row.label == "自动分配" and row.enabled is True
+
+
 def test_barrage_endpoints_require_login(client):
     assert client.get("/api/admin/barrage").status_code == 401
     assert client.post("/api/admin/barrage/1/delete").status_code == 401
+    assert client.patch("/api/admin/barrage/1", json={"content": "x", "tags": []}).status_code == 401
 
 
 # ---- summary --------------------------------------------------------------

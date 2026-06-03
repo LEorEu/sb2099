@@ -203,25 +203,39 @@ def list_tags_admin(_: str = Depends(require_admin)) -> dict:
 
 
 class TagCreateIn(BaseModel):
-    value: str
     label: str
     icon_url: str = ""
     sort: int = 0
+    value: str = ""  # 可空：留空时服务端自动分配自增内部 id（不展示给用户）
+
+
+def _next_tag_value(s) -> str:
+    """生成服务端自有的自增数字 value（纯数字串，与 tags CSV / LIKE 搜索兼容）。"""
+    used = s.execute(select(Tag.value)).scalars().all()
+    nums = [int(v) for v in used if v.isdigit()]
+    return str((max(nums) + 1) if nums else 1)
 
 
 @router.post("/tags", status_code=201)
 def create_tag_admin(body: TagCreateIn, _: str = Depends(require_admin)) -> dict:
-    if not _TAG_VALUE_RE.match(body.value):
-        raise HTTPException(status_code=400, detail="tag value 必须是 1-8 位字母或数字")
+    label = body.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="标签名不能为空")
     with _db.SessionLocal() as s:
-        if s.get(Tag, body.value):
-            raise HTTPException(status_code=409, detail="tag 已存在")
+        value = body.value.strip()
+        if value:
+            if not _TAG_VALUE_RE.match(value):
+                raise HTTPException(status_code=400, detail="tag value 必须是 1-8 位字母或数字")
+            if s.get(Tag, value):
+                raise HTTPException(status_code=409, detail="tag 已存在")
+        else:
+            value = _next_tag_value(s)
         s.add(Tag(
-            value=body.value, label=body.label,
+            value=value, label=label,
             icon_url=body.icon_url or None, sort=body.sort, enabled=True,
         ))
         s.commit()
-    return {"ok": True}
+    return {"ok": True, "value": value}
 
 
 class TagUpdateIn(BaseModel):
@@ -435,6 +449,49 @@ def list_barrage_admin(
         "last_page": res["last_page"],
         "page": page,
     }
+
+
+class BarrageEditIn(BaseModel):
+    content: str
+    tags: list[str] = []
+
+
+@router.patch("/barrage/{barrage_id}")
+def edit_barrage_admin(
+    barrage_id: int, body: BarrageEditIn, _: str = Depends(require_admin)
+) -> dict:
+    """编辑一条投稿的正文与标签。
+
+    正文改动按投稿同款 `normalize()` 重算 `content_norm`（唯一键）并查重：
+    与另一条 active/任意 投稿撞库 → 409。tags 接收 value 列表，存为去重排序后的 CSV。
+    """
+    from ..normalize import normalize
+
+    content = body.content.strip()
+    min_len = int(settings_cache.get("barrage_min_length", 4) or 4)
+    max_len = int(settings_cache.get("barrage_max_length", 255) or 255)
+    if len(content) < min_len or len(content) > max_len:
+        raise HTTPException(status_code=400, detail=f"正文长度需在 {min_len}–{max_len} 字之间")
+    content_norm = normalize(content)
+    if not content_norm:
+        raise HTTPException(status_code=400, detail="正文归一化后为空")
+    tags_csv = ",".join(sorted({t.strip() for t in body.tags if t.strip()}))
+    with _db.SessionLocal() as s:
+        row = s.get(Barrage, barrage_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="barrage 不存在")
+        clash = s.execute(
+            select(Barrage.id).where(
+                Barrage.content_norm == content_norm, Barrage.id != barrage_id
+            )
+        ).first()
+        if clash:
+            raise HTTPException(status_code=409, detail="正文与另一条烂梗重复")
+        row.content = content
+        row.content_norm = content_norm
+        row.tags = tags_csv
+        s.commit()
+    return {"ok": True}
 
 
 @router.post("/barrage/{barrage_id}/delete")

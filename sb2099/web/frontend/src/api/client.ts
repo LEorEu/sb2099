@@ -71,8 +71,8 @@ export const api = {
       req<{ ok: boolean }>('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ values }) }),
 
     getTags: () => req<{ vote_threshold: number; tags: AdminTag[] }>('/api/admin/tags'),
-    createTag: (t: { value: string; label: string; icon_url?: string; sort?: number }) =>
-      req('/api/admin/tags', { method: 'POST', body: JSON.stringify(t) }),
+    createTag: (t: { label: string; icon_url?: string; sort?: number }) =>
+      req<{ ok: boolean; value: string }>('/api/admin/tags', { method: 'POST', body: JSON.stringify(t) }),
     updateTag: (value: string, t: { label: string; icon_url?: string; sort?: number; enabled: boolean }) =>
       req(`/api/admin/tags/${value}`, { method: 'PATCH', body: JSON.stringify(t) }),
     deleteTag: (value: string) => req(`/api/admin/tags/${value}`, { method: 'DELETE' }),
@@ -94,6 +94,8 @@ export const api = {
       if (p.size) qs.set('size', String(p.size))
       return req<{ items: AdminBarrageItem[]; total: number; last_page: boolean; page: number }>(`/api/admin/barrage?${qs}`)
     },
+    editBarrage: (id: number, body: { content: string; tags: string[] }) =>
+      req(`/api/admin/barrage/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     deleteBarrage: (id: number) => req(`/api/admin/barrage/${id}/delete`, { method: 'POST' }),
 
     getTrash: () => req<{ items: AdminTrashItem[] }>('/api/admin/trash').then(r => r.items),
