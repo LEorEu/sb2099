@@ -24,3 +24,8 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 .app-wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+@media (max-width:720px){
+  .app-wrap { padding: 0 14px; }
+  /* 给固定底部 Tab 栏留出空间，避免最后一条内容被遮挡 */
+  main { padding-bottom: calc(58px + env(safe-area-inset-bottom,0)); }
+}

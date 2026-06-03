@@ -86,4 +86,5 @@ onMounted(async () => { await tags.load(); await load() })
 .pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:20px}
 .pager button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:8px 16px;font-weight:700;cursor:pointer}
 .pager button:disabled{opacity:.4;cursor:not-allowed}
+@media (max-width:720px){.page{padding:18px 14px 40px}.listhead h2{font-size:20px}}
 </style>

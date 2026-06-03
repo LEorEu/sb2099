@@ -38,4 +38,5 @@ onMounted(async () => { await tags.load(); await load() })
 .hint{font-size:12px;color:var(--subtle);margin:14px 0 18px}
 .ranklist{display:flex;flex-direction:column;gap:10px}
 .empty{padding:40px;text-align:center;color:var(--subtle)}
+@media (max-width:720px){.page{padding:18px 14px 40px}.head h2{font-size:20px}}
 </style>
