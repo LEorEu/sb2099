@@ -226,6 +226,8 @@ python -m tools.renorm_raw
 
 ## 致谢
 
+产品形态与交互上参考了同好烂梗收集站 [sb6657.cn](https://sb6657.cn)，在此致谢。
+
 抓取协议层参考了以下对斗鱼弹幕协议的逆向工程开源项目：
 
 - [qianjiachun/douyu-monitor](https://github.com/qianjiachun/douyu-monitor)
